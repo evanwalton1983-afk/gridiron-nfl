@@ -1,0 +1,15 @@
+{
+  "name": "gridiron-nfl-tests",
+  "private": true,
+  "description": "Test harness for the Gridiron NFL app. Not deployed.",
+  "scripts": {
+    "snapshot": "node test/snapshot.mjs",
+    "test": "node test/run-all.mjs"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1",
+    "jsdom": "^29.1.1",
+    "playwright": "^1.63.0"
+  }
+}
