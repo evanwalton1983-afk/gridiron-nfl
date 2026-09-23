@@ -167,3 +167,22 @@ Weeks 1 through 4 carry an on-screen notice. Holdout margin error in that window
 runs about 0.25 points worse than mid-season, because ratings have just taken the
 offseason shrink and carryover is doing most of the work. Letting those weeks look
 as solid as week 12 would be misleading.
+
+## Send to War Room
+
+The Slate tab has a **Send to War Room** button. It builds one War Room import
+(contract 1.0) holding every market on the selected week, both sides of the
+spread, total and moneyline, for every game not yet final. It then opens the
+War Room receiver in a new tab and hands the file over. The payload goes only to
+the receiver's exact origin, and only after that tab says it is ready.
+
+If the tab is blocked or does not answer within 60 seconds, **Copy JSON** and
+**Download JSON** give the same file to import by hand. The receiver address
+is under Receiver, and defaults to
+`https://lighthearted-kringle-dafe7e.netlify.app/import/receive`.
+
+The export only reads the model. Probabilities are the ones behind the board,
+with push included, not the push-free Model column. The nflverse closing
+numbers are sent as lines only, flagged `no_price_in_app`, because they have
+no book. For the War Room to accept the handoff, this site's domain must be
+listed in `handoff_allowed_origins` in War Room Settings.
