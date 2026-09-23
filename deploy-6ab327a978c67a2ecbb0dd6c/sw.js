@@ -2,7 +2,7 @@
    Bump APP_VERSION on every deploy of index.html, or the old shell keeps being
    served from cache. The nflverse CSV and The Odds API are never handled here:
    the page caches both itself, with its own freshness rules and refresh buttons. */
-const APP_VERSION='2.1.0';
+const APP_VERSION='2.2.0';
 const CACHE='gridiron-'+APP_VERSION;
 const SHELL=['./','./index.html','./manifest.webmanifest','./icon.png'];
 self.addEventListener('install',e=>{

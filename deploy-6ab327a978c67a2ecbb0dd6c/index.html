@@ -64,6 +64,18 @@ button.on{border-color:var(--model);color:var(--model)}
 .pe-books label{display:flex;gap:5px;align-items:center}
 .pe-books input{min-height:auto;width:auto;padding:0}
 .pe-note{color:var(--dim);font-size:11.5px;line-height:1.55;margin:8px 0 0}
+.wr{margin:0 0 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:10px 12px;font-size:13px}
+.wr-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.wr-row button{min-height:40px;font-size:13.5px}
+.wr-row #wrSend{border-color:var(--model);color:var(--model);font-weight:600}
+.wr-row .wr-alt{min-height:36px;font-size:12.5px;padding:0 10px;color:var(--mute)}
+.wr-row .wr-alt.hint{border-color:var(--model);color:var(--ink)}
+.wr-status{margin:8px 0 0;color:var(--mute);font-size:12.5px;line-height:1.55;overflow-wrap:anywhere}
+.wr-status:empty{display:none}
+.wr-status.err{color:var(--hot)}
+.wr-status ul{margin:4px 0 0;padding-left:18px}
+.wr-set{margin-top:8px;font-size:12.5px}
+.wr-set summary{cursor:pointer;color:var(--dim)}
 
 /* ---------- game band ---------- */
 .game{
@@ -192,6 +204,25 @@ h3{font-size:15px;font-weight:600;margin:22px 0 8px}
     slate (moneyline, spread, total). A free key has 500 a month. Prices refresh on their own at
     most once an hour. The key is stored in this browser only.</p>
   </details>
+  <div class="wr" id="wrPanel">
+    <div class="wr-row">
+      <button id="wrSend" disabled>Send to War Room</button>
+      <button id="wrCopy" class="wr-alt" disabled>Copy JSON</button>
+      <button id="wrDownload" class="wr-alt" disabled>Download JSON</button>
+    </div>
+    <p class="wr-status" id="wrStatus" role="status" aria-live="polite"></p>
+    <details class="wr-set">
+      <summary>Receiver</summary>
+      <div class="pe-row">
+        <input id="wrUrl" type="url" autocomplete="off" spellcheck="false" aria-label="War Room receiver URL">
+        <button id="wrUrlSave">Save</button>
+      </div>
+      <p class="pe-note">Every market on this week's slate, both sides, is sent as one import
+      for The War Room to record and grade. Games already final are left out. Nothing here
+      places a bet. If the tab does not answer, Copy JSON or Download JSON gives you the
+      same file to import by hand.</p>
+    </details>
+  </div>
   <div id="slate"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
 </section>
 
@@ -281,7 +312,7 @@ h3{font-size:15px;font-weight:600;margin:22px 0 8px}
       line existed, which is every modern game.
    ============================================================ */
 
-const MODEL_VERSION='2.1.0';
+const MODEL_VERSION='2.2.0';
 
 /* Staking. KELLY_FRAC is quarter Kelly, MAX_STAKE caps any single bet at
    2% of bankroll, EV_BAR is the minimum expected value per dollar risked,
@@ -1444,6 +1475,329 @@ function renderBets(){
         r.status==='open'?'open':r.status==='push'?'push':r.status+' '+(r.pl>0?'+':'')+(100*r.pl).toFixed(2)+'%'}</td>
     </tr>`).join('')}</tbody></table>`;
 }
+
+/* ============================================================
+   SEND TO WAR ROOM  (export only: reads the model, never changes it)
+
+   Builds one War Room import contract 1.0 payload for every market the app
+   evaluated on the selected week, both sides, and hands it to The War Room
+   receiver tab by postMessage. Nothing here feeds back into a prediction.
+
+   Probabilities are the app's own: for each side, the win and loss numbers
+   are the p and pOther of the board row, and push is what is left, so the
+   three sum to one. The on screen Model column (push removed) is not sent.
+   The ladder reads the same tilted distribution predictGame reads, at other
+   lines, the same way pAtLine does for closing value.
+
+   Prices: a live best price is sent with its book and the time the prices
+   were pulled. The nflverse closing columns have no book and cannot be bet,
+   so those markets send the line only and carry no_price_in_app.
+   ============================================================ */
+const WR_URL_KEY='gridiron.warroom.url';
+const WR_DEFAULT_URL='https://lighthearted-kringle-dafe7e.netlify.app/import/receive';
+const WR_READY_MS=60000;
+const WR_TZ='America/New_York';   // nflverse gametime is Eastern
+let WR_LAST=null;                 // last built payload, reused so Send, Copy and Download match
+let WR_EMPTY=false;               // status currently shows the nothing to send note
+
+function wrUrl(){ try{ return localStorage.getItem(WR_URL_KEY)||WR_DEFAULT_URL; }catch(e){ return WR_DEFAULT_URL; } }
+/* https only, except a local receiver for testing */
+function wrOriginOf(url){
+  try{ const u=new URL(url);
+    if(u.protocol==='https:'||(u.protocol==='http:'&&/^(localhost|127\.0\.0\.1)$/.test(u.hostname))) return u.origin;
+  }catch(e){}
+  return null;
+}
+const wr6=v=>Math.round(v*1e6)/1e6;
+const wr3=v=>Math.round(v*1e3)/1e3;
+const wrIso=t=>new Date(t).toISOString().replace(/\.\d{3}Z$/,'Z');
+const wrStamp=t=>wrIso(t).replace(/[-:]/g,'');
+const wrWhole=x=>Math.abs(x-Math.round(x))<1e-9;
+
+/* Minutes the Eastern clock is ahead of UTC at instant t (negative in the US). */
+function wrTzOffset(t){
+  const p={};
+  for(const x of new Intl.DateTimeFormat('en-US',{timeZone:WR_TZ,hourCycle:'h23',year:'numeric',month:'2-digit',
+    day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}).formatToParts(new Date(t))) p[x.type]=x.value;
+  return (Date.UTC(+p.year,+p.month-1,+p.day,+p.hour%24,+p.minute,+p.second)-t)/60000;
+}
+/* Eastern wall clock to UTC, correct across daylight saving changes. */
+function wrStart(g){
+  const [y,mo,d]=g.gameday.split('-').map(Number);
+  if(!g.gametime) return {start_time:g.gameday+'T00:00:00Z',start_time_precision:'date'};
+  const [h,mi]=g.gametime.split(':').map(Number);
+  const wall=Date.UTC(y,mo-1,d,h,mi);
+  let t=wall-wrTzOffset(wall)*60000;
+  t=wall-wrTzOffset(t)*60000;
+  return {start_time:wrIso(t),start_time_precision:'exact'};
+}
+
+/* The tilted margin and total distributions predictGame builds for game row gE.
+   Same inputs, same operations, same tiltTo cache key, so the same arrays. */
+function wrDists(gE){
+  const [mh,ma]=FIT.model.expected(gE);
+  const b=FIT.emp.band(gE.total_line), band=FIT.emp.bands[b], out={};
+  if(gE.spread_line!=null){ const e=((mh-ma)-gE.spread_line)*FIT.shrink.margin;
+    out.m={k:band.margin.k,p:tiltTo(band.margin,band.margin.mean+e,'m'+b),line:gE.spread_line}; }
+  if(gE.total_line!=null){ const e=((mh+ma)-gE.total_line)*FIT.shrink.total;
+    out.t={k:band.total.k,p:tiltTo(band.total,band.total.mean+e,'t'+b),line:gE.total_line}; }
+  return out;
+}
+/* Win and push for one side at selection line L, read off the distribution. */
+function wrAt(role,D,L){
+  if(role==='sh'){ const x=-L-D.line; return {w:tailAbove(D.k,D.p,x),u:atomAt(D.k,D.p,x)}; }
+  if(role==='sa'){ const x=L-D.line;  return {w:tailBelow(D.k,D.p,x),u:atomAt(D.k,D.p,x)}; }
+  if(role==='ov'){ const x=L-D.line;  return {w:tailAbove(D.k,D.p,x),u:atomAt(D.k,D.p,x)}; }
+  const x=L-D.line; return {w:tailBelow(D.k,D.p,x),u:atomAt(D.k,D.p,x)};
+}
+function wrLadder(role,D,L){
+  const out=[];
+  for(let d=-2;d<=2;d+=0.5){ const l=L+d, r=wrAt(role,D,l); out.push({line:l,prob_win:wr6(r.w),prob_push:wr6(r.u)}); }
+  return out;
+}
+
+/* Every evaluated side of one game, each with the game row it was evaluated on.
+   Live: the best price at your books where the app found one, otherwise the
+   consensus line the app displays. File: the board rows as shown. */
+function wrSides(g,p){
+  const out={};
+  if(p.live){
+    const m=peEventFor(g), books=m?peBooksOf(m.ev,PE_S.mine):[];
+    for(const x of p.bets){
+      const bk=books.find(b=>b.key===x.book); if(!m||!bk) continue;
+      out[peRole(x,g)]={x,gE:peBookGame(g,bk,m.hn,m.an),priced:true};
+    }
+    const gC={...g,spread_line:p.mktLine.spread,total_line:p.mktLine.total,
+      home_sp_odds:null,away_sp_odds:null,over_odds:null,under_odds:null,home_ml:null,away_ml:null};
+    for(const x of predictGame(FIT,gC).bets){ const r=peRole(x,g); if(!out[r]) out[r]={x,gE:gC,priced:false}; }
+  } else {
+    for(const x of p.bets) out[peRole(x,g)]={x,gE:g,priced:false};
+  }
+  return out;
+}
+
+const WR_MKT={sh:'spread',sa:'spread',mh:'moneyline',ma:'moneyline',ov:'total',un:'total'};
+const WR_SIDE={sh:'home',sa:'away',mh:'home',ma:'away',ov:'over',un:'under'};
+
+function wrRecords(g,p,label){
+  const start=wrStart(g);
+  const event={source_event_id:g.id,start_time:start.start_time,start_time_precision:start.start_time_precision,
+    timezone:WR_TZ,neutral_site:!!g.neutral,
+    participants:[{role:'away',name:g.away_team},{role:'home',name:g.home_team}]};
+  const base=[];
+  if(g.week<=4) base.push('early_season');
+  if(!g.home_qb_id||!g.away_qb_id) base.push('uncertain_qb');
+  if(p.why==='not at your books') base.push('not_at_your_books');
+  const sides=wrSides(g,p), recs=[];
+  for(const role of PE_ROLES){
+    const s=sides[role]; if(!s) continue;
+    const {x,gE}=s, mkt=WR_MKT[role], flags=base.slice();
+    let line=null;
+    if(role==='sh') line=-gE.spread_line; else if(role==='sa') line=gE.spread_line;
+    else if(mkt==='total') line=gE.total_line;
+    const push=Math.max(0,1-x.p-x.pOther);
+    const model={prob_win:wr6(x.p),prob_push:wr6(push),prob_loss:wr6(x.pOther)};
+    if(mkt==='spread'){ const v=role==='sh'?p.margin:-p.margin;
+      model.projection={kind:'margin',value:wr3(v)}; model.fair_line=wr3(-v); }
+    if(mkt==='total'){ model.projection={kind:'total',value:wr3(p.total)}; model.fair_line=wr3(p.total); }
+    if(mkt!=='moneyline'){
+      const D=wrDists(gE)[mkt==='spread'?'m':'t'];
+      if(D) model.ladder=wrLadder(role,D,line);
+      if(!wrWhole(line)&&model.prob_push>0) flags.push('push_on_half_line');
+    }
+    let price;
+    if(s.priced&&x.odds!=null&&x.book){
+      price={...(line!=null?{line}:{}),american_odds:x.odds,
+        opposite_american_odds:x.oddsOther!=null?x.oddsOther:null,
+        sportsbook:peShort(x.book),captured_at:wrIso(PE_DATA.at)};
+    } else {
+      flags.push('no_price_in_app');
+      if(line!=null) price={line};
+    }
+    const sideTeam=WR_SIDE[role]==='home'?g.home_team:g.away_team;
+    const selLabel=mkt==='moneyline'?sideTeam+' ML':mkt==='spread'?sideTeam+' '+fmtLine(line):x.side.split(' ')[0]+' '+line;
+    const rec={record_id:g.id+'-'+mkt+'-'+WR_SIDE[role],sport:'NFL',league:'NFL',season:g.season,
+      grouping:{type:'week',label},event,
+      market:{type:mkt,period:'full_game',participant_scope:null,is_alternate:false},
+      selection:{side:WR_SIDE[role],label:selLabel}};
+    if(price) rec.price=price;
+    rec.model=model; rec.flags=flags;
+    recs.push(rec);
+  }
+  return recs;
+}
+
+/* One payload for the selected week. Built once per slate state and reused,
+   so Send, Copy and Download always carry identical JSON. */
+function wrBuild(){
+  if(!FIT) return {payload:null,errors:['The model has not finished loading.'],skipped:[]};
+  const key=[SEASON,WEEK,FIT.through&&FIT.through.id,PE_DATA&&PE_DATA.at,PE_S.mine.join(',')].join('|');
+  if(WR_LAST&&WR_LAST.key===key) return WR_LAST;
+  const now=Date.now(), label='Week '+WEEK;
+  const slate=GAMES.filter(g=>g.season===SEASON&&g.week===WEEK)
+    .sort((a,b)=>(a.gameday+(a.gametime||'')).localeCompare(b.gameday+(b.gametime||''))||a.id.localeCompare(b.id));
+  const records=[], skipped=[];
+  let games=0;
+  for(const g of slate){
+    if(g.home_score!=null){ skipped.push(g.away_team+' at '+g.home_team+' is final'); continue; }
+    const p=predictLive(g);
+    const recs=wrRecords(g,p,label);
+    if(!recs.length){ skipped.push(g.away_team+' at '+g.home_team+' has no line'); continue; }
+    records.push(...recs); games++;
+  }
+  const live=!!(PE_DATA&&PE_DATA.at&&PE_DATA.events&&PE_DATA.events.length);
+  const payload={contract:'warroom.import',contract_version:'1.0',
+    batch:{source_batch_id:'gridiron_nfl-'+SEASON+'-'+label+'-'+wrStamp(now),source_app:'gridiron_nfl',
+      model_name:'Gridiron NFL',model_version:MODEL_VERSION,
+      model_config:{...BEST,KELLY_FRAC,MAX_STAKE,EV_BAR,NOVIG_BAR,
+        shrink_margin:FIT.shrink.margin,shrink_total:FIT.shrink.total,shrink_n:FIT.shrink.n,shrink_fallback:!!FIT.shrink.fallback,
+        band_cuts:[FIT.emp.c1,FIT.emp.c2],tie_rate:FIT.emp.tie,fit_through:FIT.through?FIT.through.id:null,
+        price_source:live?'odds_api':'nflverse_close',books:live?PE_S.mine.map(peShort):[],
+        prices_pulled_at:live?wrIso(PE_DATA.at):null},
+      generated_at:wrIso(now),is_backfill:false},
+    records};
+  const errors=records.length?wrValidate(payload):['Nothing to send: '+(slate.length?'no game on this week is still to be played.':'no games this week.')];
+  return WR_LAST={key,payload,errors,skipped,games,label,json:JSON.stringify(payload,null,2)};
+}
+
+/* The parts of warroom-import-1.0.schema.json this payload uses, plus the
+   War Room's own import rules, checked before anything leaves the page. */
+function wrValidate(P){
+  const E=[], ts=/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+  const str=v=>typeof v==='string'&&v.length>0, num=v=>typeof v==='number'&&isFinite(v), int=v=>Number.isInteger(v);
+  const okTs=v=>str(v)&&ts.test(v)&&!isNaN(Date.parse(v));
+  const inU=v=>num(v)&&v>=0&&v<=1;
+  if(P.contract!=='warroom.import') E.push('contract must be warroom.import');
+  if(P.contract_version!=='1.0') E.push('contract_version must be 1.0');
+  const B=P.batch||{};
+  for(const f of ['source_batch_id','model_name','model_version']) if(!str(B[f])) E.push('batch.'+f+' is missing');
+  if(B.source_app!=='gridiron_nfl') E.push('batch.source_app is wrong');
+  if(!okTs(B.generated_at)) E.push('batch.generated_at is not a UTC timestamp');
+  if(!Array.isArray(P.records)||!P.records.length) E.push('records is empty');
+  const ids=new Set();
+  (P.records||[]).forEach((r,i)=>{
+    const at='record '+(r&&r.record_id||i)+': ', e=m=>E.push(at+m);
+    if(!str(r.record_id)) e('record_id missing'); else if(ids.has(r.record_id)) e('duplicate record_id'); else ids.add(r.record_id);
+    if(!str(r.sport)||!str(r.league)) e('sport or league missing');
+    if(!int(r.season)) e('season must be an integer');
+    if(!r.grouping||!['week','card','tournament'].includes(r.grouping.type)||!str(r.grouping.label)) e('grouping invalid');
+    const ev=r.event||{};
+    if(!okTs(ev.start_time)) e('event.start_time is not a UTC timestamp');
+    if(!['exact','date'].includes(ev.start_time_precision)) e('event.start_time_precision invalid');
+    if(!str(ev.timezone)) e('event.timezone missing');
+    if(!Array.isArray(ev.participants)||ev.participants.length!==2
+      ||ev.participants.some(x=>!['home','away'].includes(x.role)||!str(x.name))) e('event.participants invalid');
+    const mt=r.market&&r.market.type;
+    if(!['spread','total','moneyline'].includes(mt)) e('market.type invalid');
+    const side=r.selection&&r.selection.side;
+    if(!(mt==='total'?['over','under']:['home','away']).includes(side)||!str(r.selection.label)) e('selection invalid');
+    const pr=r.price, fl=r.flags||[];
+    if(!Array.isArray(fl)||fl.some(f=>!str(f))) e('flags invalid');
+    if(mt!=='moneyline'&&!(pr&&num(pr.line))) e('a '+mt+' needs price.line');
+    if(pr){
+      if(pr.american_odds!=null){
+        if(!int(pr.american_odds)||Math.abs(pr.american_odds)<100) e('american_odds invalid');
+        if(pr.opposite_american_odds!=null&&(!int(pr.opposite_american_odds)||Math.abs(pr.opposite_american_odds)<100)) e('opposite_american_odds invalid');
+        if(!str(pr.sportsbook)) e('a price needs its sportsbook');
+        if(!okTs(pr.captured_at)) e('a price needs captured_at as a UTC timestamp');
+      } else {
+        if(pr.sportsbook!=null||pr.captured_at!=null) e('a price block with a book needs odds');
+        if(!fl.includes('no_price_in_app')) e('no odds, so flag no_price_in_app is required');
+      }
+    } else if(!fl.includes('no_price_in_app')) e('no price, so flag no_price_in_app is required');
+    const m=r.model||{};
+    if(!inU(m.prob_win)||!inU(m.prob_push)||!inU(m.prob_loss)) e('probabilities must be between 0 and 1');
+    else if(Math.abs(m.prob_win+m.prob_push+m.prob_loss-1)>0.001) e('probabilities do not sum to 1');
+    (m.ladder||[]).forEach(s=>{ if(!num(s.line)||!inU(s.prob_win)||!inU(s.prob_push)) e('ladder step invalid'); });
+  });
+  return E;
+}
+
+function wrSay(html,err){ const s=$('wrStatus'); s.innerHTML=html; s.classList.toggle('err',!!err); }
+function wrHint(on){ $('wrCopy').classList.toggle('hint',on); $('wrDownload').classList.toggle('hint',on); }
+function wrSummary(B){
+  return `${B.payload.records.length} records for ${B.games} game${B.games===1?'':'s'}, ${esc(B.label)}`
+    +(B.skipped.length?`. Left out: ${B.skipped.map(esc).join('; ')}`:'')+'.';
+}
+/* Returns the built payload, or shows the errors and returns null. */
+function wrReady(){
+  const B=wrBuild();
+  if(B.errors.length){
+    wrSay(`<b>Not sent.</b> The payload failed validation:<ul>${B.errors.slice(0,12).map(x=>'<li>'+esc(x)+'</li>').join('')}</ul>`
+      +(B.errors.length>12?`and ${B.errors.length-12} more.`:''),true);
+    return null;
+  }
+  return B;
+}
+
+/* Enable the buttons only when the selected week has something to send. */
+function wrRefresh(){
+  if(!FIT) return;
+  const up=GAMES.filter(g=>g.season===SEASON&&g.week===WEEK&&g.home_score==null).length;
+  for(const id of ['wrSend','wrCopy','wrDownload']) $(id).disabled=!up;
+  if(!up){ wrSay('Nothing to send for this week: every game is final.'); WR_EMPTY=true; }
+  else if(WR_EMPTY){ wrSay(''); WR_EMPTY=false; }
+}
+function wrSend(){
+  const B=wrReady(); if(!B) return;
+  const url=wrUrl(), origin=wrOriginOf(url);
+  if(!origin){ wrSay('The receiver URL is not a valid https address. Fix it under Receiver.',true); return; }
+  let win=null, sent=false, timer=null;
+  const done=()=>{ window.removeEventListener('message',onMsg); clearTimeout(timer); };
+  function onMsg(ev){
+    if(ev.origin!==origin||!win||ev.source!==win) return;   // only that tab, only that origin
+    const d=ev.data; if(!d||typeof d!=='object') return;
+    if(d.type==='warroom:ready'&&!sent){
+      sent=true; clearTimeout(timer);
+      win.postMessage({type:'warroom:payload',payload:B.payload},origin);
+      wrSay(`Handed ${wrSummary(B)} Sign in to The War Room in the new tab to finish.`);
+    } else if(d.type==='warroom:received'&&sent){
+      done(); wrSay(`Sent ${Number(d.records)||0} records. Finish the import in The War Room.`);
+    }
+  }
+  window.addEventListener('message',onMsg);
+  win=window.open(url,'_blank');
+  if(!win){ done(); wrHint(true);
+    wrSay('The browser blocked the new tab. Allow pop ups for this site, or use Copy JSON or Download JSON and import the file in The War Room.',true);
+    return; }
+  wrHint(false);
+  wrSay(`Opening The War Room. ${wrSummary(B)}`);
+  timer=setTimeout(()=>{ if(sent) return; done(); wrHint(true);
+    wrSay('No answer from The War Room within 60 seconds. Use Copy JSON or Download JSON and import the file there.',true);
+  },WR_READY_MS);
+}
+async function wrCopy(){
+  const B=wrReady(); if(!B) return;
+  let ok=false;
+  try{ await navigator.clipboard.writeText(B.json); ok=true; }catch(e){
+    try{ const t=document.createElement('textarea'); t.value=B.json; t.setAttribute('readonly','');
+      t.style.position='fixed'; t.style.opacity='0'; document.body.appendChild(t); t.select();
+      ok=document.execCommand('copy'); t.remove(); }catch(x){}
+  }
+  wrSay(ok?`Copied ${wrSummary(B)}`:'Copy failed in this browser. Use Download JSON.',!ok);
+}
+function wrDownload(){
+  const B=wrReady(); if(!B) return;
+  const slug=B.label.toLowerCase().replace(/[^a-z0-9]+/g,'-');
+  const name='warroom-gridiron_nfl-'+slug+'-'+wrStamp(Date.parse(B.payload.batch.generated_at))+'.json';
+  const blob=new Blob([B.json],{type:'application/json'});
+  const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  wrSay(`Downloaded ${esc(name)}: ${wrSummary(B)}`);
+}
+$('wrSend').onclick=wrSend;
+$('wrCopy').onclick=wrCopy;
+$('wrDownload').onclick=wrDownload;
+$('wrUrl').value=wrUrl();
+$('wrUrlSave').onclick=()=>{
+  const v=$('wrUrl').value.trim()||WR_DEFAULT_URL;
+  if(!wrOriginOf(v)){ wrSay('That is not a valid https address.',true); return; }
+  try{ localStorage.setItem(WR_URL_KEY,v); }catch(e){}
+  $('wrUrl').value=v; wrSay('Receiver saved.');
+};
+/* Re-check whenever the slate re-renders (week change, refresh, prices). */
+new MutationObserver(wrRefresh).observe($('slate'),{childList:true});
 
 /* ============================================================
    BOOT
