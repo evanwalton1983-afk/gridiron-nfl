@@ -6,7 +6,9 @@ ratings across every completed game since 1999, and predicts the selected week.
 
 ## Deploy to Netlify
 
-Drag this whole folder onto the Netlify drop zone at https://app.netlify.com/drop
+Drag the `deploy` folder (and only that folder) onto the Netlify drop zone at
+https://app.netlify.com/drop. It holds just the five files the live app needs.
+Everything else in this project (tests, docs, node_modules) stays out of it.
 
 That is the entire deployment. No build step, no environment variables, no
 dependencies. `netlify.toml` sets the publish directory and keeps the service

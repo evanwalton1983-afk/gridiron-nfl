@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(here, '..', '..');
-export const APP_DIR = path.join(ROOT, 'deploy-6ab327a978c67a2ecbb0dd6c');
+export const APP_DIR = path.join(ROOT, 'deploy');
 export const FIX = path.join(ROOT, 'test', 'fixtures');
 export const NOW = Date.parse('2026-09-23T19:00:00Z');
 export const APP_ORIGIN = 'https://gridiron.test';
