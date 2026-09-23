@@ -1,0 +1,1603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#151A26">
+<title>Gridiron Model</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.png">
+<style>
+:root{
+  --bg:#151A26; --surface:#1E2433; --surface2:#252C3D; --line:#2F3849;
+  --ink:#E8EAF0; --mute:#8891A6; --dim:#5D677E;
+  --model:#F0A830;      /* every number the model produced */
+  --market:#5B8FC7;     /* every number the market produced */
+  --hot:#E05C4B;        /* magnitude emphasis, always paired with size */
+  --good:#4CAF7D;
+  --r:10px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  font-size:16px; line-height:1.5;
+  font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1;
+  padding:0 0 max(28px,env(safe-area-inset-bottom));
+  -webkit-font-smoothing:antialiased;
+}
+.wrap{max-width:760px;margin:0 auto;padding:0 14px}
+
+/* ---------- header ---------- */
+header{padding:20px 0 12px;border-bottom:1px solid var(--line);margin-bottom:14px}
+h1{font-size:21px;font-weight:650;letter-spacing:-.015em;margin:0 0 3px}
+.sub{font-size:13px;color:var(--mute);margin:0}
+.legend{display:flex;gap:16px;margin-top:11px;font-size:12.5px;color:var(--mute)}
+.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+/* ---------- controls ---------- */
+.bar{display:flex;gap:8px;align-items:center;margin:14px 0;flex-wrap:wrap}
+button,select,input{
+  font:inherit;font-size:14px;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r);
+  min-height:44px;padding:0 14px;cursor:pointer;
+  transition:background .14s ease,border-color .14s ease;
+}
+input{cursor:text;padding:0 10px}
+button:hover,select:hover{background:var(--surface2)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--model);outline-offset:2px}
+button[disabled]{opacity:.4;cursor:default}
+button.on{border-color:var(--model);color:var(--model)}
+.spacer{flex:1}
+.tabs{display:flex;gap:6px;margin:0 0 14px}
+.tabs button{flex:1;padding:0 6px;font-size:13.5px}
+.bank{display:flex;gap:8px;align-items:center;margin:0 0 14px;font-size:12.5px;color:var(--dim);flex-wrap:wrap}
+.bank input{min-height:38px;width:104px;font-size:13.5px}
+.prices{margin:0 0 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:10px 12px;font-size:13px}
+.prices summary{cursor:pointer;color:var(--ink);font-weight:600}
+.prices summary span{color:var(--dim);font-weight:400;font-size:12px;margin-left:6px}
+.pe-row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.pe-row input{flex:1;min-width:200px;min-height:38px;font-size:13.5px}
+.pe-row button{min-height:38px;font-size:13.5px}
+.pe-books{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:10px;font-size:12.5px;color:var(--mute)}
+.pe-books label{display:flex;gap:5px;align-items:center}
+.pe-books input{min-height:auto;width:auto;padding:0}
+.pe-note{color:var(--dim);font-size:11.5px;line-height:1.55;margin:8px 0 0}
+
+/* ---------- game band ---------- */
+.game{
+  border:1px solid var(--line);border-radius:var(--r);
+  background:var(--surface);margin-bottom:9px;overflow:hidden;
+}
+.head{
+  display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;
+  padding:13px 14px;cursor:pointer;min-height:44px;
+}
+.head:focus-visible{outline:2px solid var(--model);outline-offset:-2px}
+.match{font-size:16.5px;font-weight:600;letter-spacing:-.01em}
+.when{font-size:12.5px;color:var(--dim);margin-top:2px}
+.score{font-size:13.5px;color:var(--model);margin-top:5px;font-weight:550}
+.score span{color:var(--dim);font-weight:400}
+
+.edge{text-align:right;line-height:1.15;max-width:190px}
+.edgeN{font-size:21px;font-weight:680;letter-spacing:-.03em;display:block}
+.edgeL{font-size:11.5px;color:var(--dim);margin-top:2px;display:block}
+.edgeN.bet{color:var(--model)}
+.edgeN.none{color:var(--dim);font-size:17px}
+
+/* ---------- compare strip ---------- */
+.strip{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border-top:1px solid var(--line)}
+.cell{background:var(--surface);padding:9px 14px}
+.cell h4{margin:0 0 4px;font-size:11.5px;font-weight:500;color:var(--dim);letter-spacing:.01em}
+.pair{display:flex;gap:12px;font-size:14.5px;font-weight:600}
+.mv{color:var(--model)} .kv{color:var(--market)}
+.pair small{font-weight:400;font-size:11.5px;color:var(--dim);display:block;margin-top:-2px}
+
+/* ---------- detail ---------- */
+.detail{display:none;padding:0 14px 14px;border-top:1px solid var(--line);background:var(--surface2)}
+.detail.open{display:block}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:13px}
+.stat{background:var(--surface);border-radius:8px;padding:10px 11px}
+.stat b{display:block;font-size:19px;font-weight:650;letter-spacing:-.02em}
+.stat span{font-size:11.5px;color:var(--dim)}
+.qbs{margin-top:12px;font-size:13px;color:var(--mute);line-height:1.7}
+.qbs b{color:var(--ink);font-weight:550}
+.bars{margin-top:12px}
+.brow{display:grid;grid-template-columns:52px 1fr 46px;gap:9px;align-items:center;margin-bottom:6px;font-size:12.5px}
+.track{height:7px;background:var(--bg);border-radius:4px;overflow:hidden}
+.fill{height:100%;border-radius:4px}
+.board{margin-top:14px;font-size:12.5px}
+.board table{font-size:12.5px}
+.board th,.board td{padding:6px 4px}
+.logbet{margin-top:14px;padding:11px;background:var(--surface);border-radius:8px;
+  display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:var(--dim)}
+.logbet input{min-height:38px;width:86px;font-size:13.5px}
+.logbet button{min-height:38px;font-size:13.5px}
+
+/* ---------- tables ---------- */
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:9px 6px;text-align:right;border-bottom:1px solid var(--line)}
+th{font-size:12px;font-weight:500;color:var(--dim);position:sticky;top:0;background:var(--bg)}
+th:first-child,td:first-child{text-align:left;font-weight:600}
+tbody tr:hover{background:var(--surface)}
+.pos{color:var(--model)} .neg{color:var(--market)}
+.win{color:var(--good)} .loss{color:var(--hot)}
+
+/* ---------- states ---------- */
+.note{color:var(--mute);font-size:14px;padding:26px 2px;line-height:1.6}
+.err{color:var(--hot)}
+.callout{border:1px solid var(--line);border-left:3px solid var(--model);border-radius:var(--r);
+  background:var(--surface);padding:12px 14px;margin-bottom:9px;font-size:13px;
+  color:var(--mute);line-height:1.6}
+.callout b{color:var(--model)}
+.skel{height:86px;border-radius:var(--r);background:var(--surface);margin-bottom:9px;
+  background-image:linear-gradient(90deg,var(--surface) 0%,var(--surface2) 50%,var(--surface) 100%);
+  background-size:200% 100%;animation:sh 1.3s ease-in-out infinite}
+@keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+footer{margin-top:24px;padding-top:14px;border-top:1px solid var(--line);font-size:12px;color:var(--dim);line-height:1.7}
+h3{font-size:15px;font-weight:600;margin:22px 0 8px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+@media (max-width:420px){
+  .edgeN{font-size:19px}
+  .grid{grid-template-columns:repeat(2,1fr)}
+  .match{font-size:15.5px}
+  .edge{max-width:150px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>Gridiron Model</h1>
+  <p class="sub" id="sub">Loading season data</p>
+  <div class="legend">
+    <span><i style="background:var(--model)"></i>Model</span>
+    <span><i style="background:var(--market)"></i>Market</span>
+  </div>
+</header>
+
+<div class="tabs">
+  <button id="tabSlate" class="on">Slate</button>
+  <button id="tabRatings">Ratings</button>
+  <button id="tabLog">Season log</button>
+  <button id="tabBets">Bets</button>
+</div>
+
+<section id="slateView">
+  <div class="bar">
+    <button id="prev" aria-label="Previous week">Prev</button>
+    <select id="weekSel" aria-label="Select week"></select>
+    <button id="next" aria-label="Next week">Next</button>
+    <span class="spacer"></span>
+    <button id="sortBtn">Sort: time</button>
+    <button id="refresh" aria-label="Refresh data from nflverse">Refresh</button>
+  </div>
+  <div class="bank">
+    <span>Bankroll</span><input id="bank" type="number" inputmode="decimal" min="0" step="10" aria-label="Bankroll in dollars">
+    <span>Unit</span><input id="unit" type="number" inputmode="decimal" min="1" step="1" aria-label="Dollars per unit">
+    <span id="bankNote"></span>
+  </div>
+  <details class="prices" id="pricePanel">
+    <summary>Live prices <span id="peStatus"></span></summary>
+    <div class="pe-row">
+      <input id="peKey" type="password" autocomplete="off" placeholder="The Odds API key (free at the-odds-api.com)" aria-label="Odds API key">
+      <button id="peSave">Save</button>
+      <button id="peRefresh">Refresh prices</button>
+    </div>
+    <div class="pe-books" id="peBooks"></div>
+    <p class="pe-note">Tick the books you can bet at. Best prices come only from these; every book
+    still counts toward the vig free consensus. One refresh costs 3 credits for every game on the
+    slate (moneyline, spread, total). A free key has 500 a month. Prices refresh on their own at
+    most once an hour. The key is stored in this browser only.</p>
+  </details>
+  <div id="slate"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+</section>
+
+<section id="ratingsView" style="display:none">
+  <div class="bar">
+    <select id="ratingSort" aria-label="Sort ratings">
+      <option value="net">Sort by net rating</option>
+      <option value="off">Sort by offense</option>
+      <option value="def">Sort by defense</option>
+      <option value="qb">Sort by quarterback</option>
+      <option value="team">Sort by team</option>
+    </select>
+  </div>
+  <div id="ratings"></div>
+</section>
+
+<section id="logView" style="display:none">
+  <div id="log"></div>
+</section>
+
+<section id="betsView" style="display:none">
+  <div class="bar">
+    <button id="exportBets">Export</button>
+    <button id="importBets">Import</button>
+    <span class="spacer"></span>
+    <button id="clearBets">Clear all</button>
+  </div>
+  <div id="bets"></div>
+</section>
+
+<footer>
+  <div>Ratings fit on every completed game since 1999. Data refreshes from nflverse.</div>
+  <div id="foot2"></div>
+  <div id="foot3"></div>
+  <div style="margin-top:8px">Spread and total probabilities are calibrated but showed no
+  ranking skill on historical testing. The only number here that can tell you whether any of
+  this works is the graded record in the season log and your closing line value in the bets
+  tab. Accuracy is not edge.</div>
+</footer>
+
+</div>
+
+<script>
+/* ============================================================
+   GRIDIRON MODEL
+   v2.0.0
+
+   What changed in 2.0 and why, so future me does not undo it:
+
+   1. Empirics are built from the data at runtime, not pasted in.
+      The old file carried hardcoded MARGIN_PMF, TOTAL_PMF, MARGIN_SHRINK
+      and TOTAL_SHRINK from an offline tune.py run with no date on them.
+      Rebuilt from the current file the margin shrink is 0.142, not 0.097,
+      and the total shrink is 0.049, not 0.087. Constants that drift that
+      far without telling you are worse than no constants.
+
+   2. The residual distribution is conditioned on the total line.
+      One pooled shape was being used for a 36 point game and a 52 point
+      game. Scoring variance is not constant, and the tails are exactly
+      where a small probability error turns into a large Kelly stake.
+
+   3. Edges tilt the distribution instead of shifting it.
+      Shifting a 0.5 point grid by a continuous edge and reading a strict
+      tail collapsed 1,135 distinct edges into SEVEN distinct cover
+      probabilities across 4,379 games. Whether a bet cleared the bar was
+      decided by rounding. Exponential tilting moves the mean without
+      moving the support, so the output is continuous and the key number
+      atoms survive.
+
+   4. A bet must beat the vig free market price, not just show EV.
+      Graded at closing prices from 2010, the old EV only rule flagged
+      3,047 of 4,379 games (70%) and returned -2.04% per unit. Setting
+      the shrink to zero, so the ratings contributed literally nothing,
+      still flagged 66% of games with the same result. The picks were not
+      coming from the model. They came from the gap between the pooled
+      residual shape and the book's implied probabilities. Requiring the
+      model to beat the no vig price by NOVIG_BAR cuts the flag rate to
+      about 17% and removes most of the losing moneyline block.
+
+   5. Nothing on the read path mutates the model. expected() used to call
+      _roll(), so rendering a future season silently applied the offseason
+      shrink to the live ratings.
+
+   6. The discarded math is gone. ScoreDist, the tilted score convolution
+      and the unused total convolution cost 370 ms of the 385 ms spent on
+      a full season log, and the result was thrown away whenever a spread
+      line existed, which is every modern game.
+   ============================================================ */
+
+const MODEL_VERSION='2.1.0';
+
+/* Staking. KELLY_FRAC is quarter Kelly, MAX_STAKE caps any single bet at
+   2% of bankroll, EV_BAR is the minimum expected value per dollar risked,
+   NOVIG_BAR is the minimum the model must beat the vig free price by. */
+const KELLY_FRAC=0.25, MAX_STAKE=0.02, EV_BAR=0.02, NOVIG_BAR=0.04;
+
+/* Rating parameters from the offline fit. These are the only numbers still
+   pasted in, and they are the ones a walk forward log can police. */
+const BEST={gain:.0624,qb_gain:.0372,qb_share:.4683,revert:.3949,qb_revert:.0236,
+  qb_prior:-.8695,qb_ramp:3,base:21.5,hfa:1.6464,rest_coef:.0674,
+  wind_coef:-.1503,roof_bonus:.349};
+
+const amToDec=a=>a>0?1+a/100:1+100/-a;
+const amToProb=a=>a>0?100/(a+100):-a/(-a+100);
+/* EV per dollar risked, pushes returned not won */
+function evPush(pw,pl,odds){if(odds==null)return null;return pw*(amToDec(odds)-1)-pl;}
+function kellyOf(p,odds){if(odds==null)return 0;const d=amToDec(odds);if(d<=1)return 0;
+  const f=(p*d-1)/(d-1);return f>0?f:0;}
+/* Vig free pair from two sided prices. Returns null if either side is unpriced. */
+function noVig(o1,o2){if(o1==null||o2==null)return null;
+  const q1=amToProb(o1),q2=amToProb(o2),s=q1+q2;
+  return s>0?[q1/s,q2/s]:null;}
+
+/* ============================================================
+   CSV
+   ============================================================ */
+function parseCSV(text){
+  let rows;
+  /* Fast path. The file is 2.1 MB and the character by character parser was
+     the single largest cost on load. Quoted fields do exist (empty surface
+     values on international games), so a line is only split naively when it
+     contains no quote at all, and the whole thing falls back to the slow
+     parser if any line has an unbalanced quote, which is the only way a
+     field could contain a newline. */
+  const lines=text.split('\n');
+  let safe=true;
+  for(let i=0;i<lines.length;i++){
+    let q=0;const L=lines[i];
+    for(let j=0;j<L.length;j++)if(L.charCodeAt(j)===34)q++;
+    if(q&1){safe=false;break;}
+  }
+  if(safe){
+    rows=[];
+    for(let i=0;i<lines.length;i++){
+      let L=lines[i];
+      if(L.charCodeAt(L.length-1)===13)L=L.slice(0,-1);
+      if(!L.length)continue;
+      rows.push(L.indexOf('"')===-1?L.split(','):slowLine(L));
+    }
+  } else {
+    rows=slowAll(text);
+  }
+  const head=rows.shift(),ix={};head.forEach((h,i)=>ix[h]=i);
+  /* nflverse is upstream of this app. If a column is renamed the parser would
+     quietly produce nulls and the app would show confident nonsense, so the
+     required headers are checked and failure is loud. Every column the model
+     or the betting layer reads is required, including location: when that one
+     went unchecked a rename would have made every game a neutral site and
+     silently deleted home field advantage. */
+  const need=['game_id','season','week','gameday','gametime','location','home_team','away_team',
+    'home_score','away_score','spread_line','total_line','home_qb_id','away_qb_id','roof','wind',
+    'home_moneyline','away_moneyline','home_spread_odds','away_spread_odds','over_odds','under_odds',
+    'home_rest','away_rest'];
+  const miss=need.filter(c=>ix[c]===undefined);
+  if(miss.length)throw new Error('games.csv is missing expected column(s): '
+    +miss.join(', ')+'. The upstream data format changed.');
+  const n=v=>(v===''||v==null)?null:(isNaN(+v)?null:+v);
+  return rows.filter(r=>r.length>5).map(r=>({
+    id:r[ix.game_id],
+    season:n(r[ix.season]),week:n(r[ix.week]),gameday:r[ix.gameday],gametime:r[ix.gametime],
+    home_team:r[ix.home_team],away_team:r[ix.away_team],
+    home_score:n(r[ix.home_score]),away_score:n(r[ix.away_score]),
+    home_qb_id:r[ix.home_qb_id]||null,away_qb_id:r[ix.away_qb_id]||null,
+    home_qb_name:r[ix.home_qb_name]||null,away_qb_name:r[ix.away_qb_name]||null,
+    home_rest:n(r[ix.home_rest]),away_rest:n(r[ix.away_rest]),
+    spread_line:n(r[ix.spread_line]),total_line:n(r[ix.total_line]),
+    roof:(r[ix.roof]||'').toLowerCase(),wind:n(r[ix.wind]),
+    game_type:r[ix.game_type],neutral:r[ix.location]!=='Home'?1:0,
+    home_ml:n(r[ix.home_moneyline]),away_ml:n(r[ix.away_moneyline]),
+    home_sp_odds:n(r[ix.home_spread_odds]),away_sp_odds:n(r[ix.away_spread_odds]),
+    over_odds:n(r[ix.over_odds]),under_odds:n(r[ix.under_odds])
+  }));
+}
+function slowLine(L){const row=[];let f='',q=false;
+  for(let i=0;i<L.length;i++){const c=L[i];
+    if(q){if(c==='"'){if(L[i+1]==='"'){f+='"';i++;}else q=false;}else f+=c;}
+    else if(c==='"')q=true;
+    else if(c===','){row.push(f);f='';}
+    else f+=c;}
+  row.push(f);return row;}
+function slowAll(text){const rows=[];let row=[],f='',q=false;
+  for(let i=0;i<text.length;i++){const c=text[i];
+    if(q){if(c==='"'){if(text[i+1]==='"'){f+='"';i++;}else q=false;}else f+=c;}
+    else if(c==='"')q=true;
+    else if(c===','){row.push(f);f='';}
+    else if(c==='\n'){row.push(f);rows.push(row);row=[];f='';}
+    else if(c!=='\r')f+=c;}
+  if(f.length||row.length){row.push(f);rows.push(row);}
+  return rows;}
+
+/* ============================================================
+   MODEL
+   Reads never mutate. roll() is called explicitly by the fit loop.
+   ============================================================ */
+class Model{
+  constructor(p=BEST){Object.assign(this,p);
+    this.off=new Map();this.dfn=new Map();this.qb=new Map();this.qbN=new Map();
+    this.season=null;this.baseHist=[];}
+  _o(t){const v=this.off.get(t);return v===undefined?0:v;}
+  _d(t){const v=this.dfn.get(t);return v===undefined?0:v;}
+  _q(id){if(!id)return this.qb_prior;
+    const r=this.qb.has(id)?this.qb.get(id):this.qb_prior;
+    const n=this.qbN.get(id)||0,w=Math.min(n,this.qb_ramp)/this.qb_ramp;
+    return w*r+(1-w)*this.qb_prior;}
+  /* Offseason regression toward the mean. Called once per game by the fit
+     loop, never from a read, so opening next season's schedule cannot
+     quietly shrink the ratings you are looking at. */
+  roll(s){if(this.season!==null&&s!==this.season){
+      for(const[k,v]of this.off)this.off.set(k,v*(1-this.revert));
+      for(const[k,v]of this.dfn)this.dfn.set(k,v*(1-this.revert));
+      for(const[k,v]of this.qb)this.qb.set(k,v*(1-this.qb_revert));}
+    this.season=s;}
+  _env(g){if(g.roof==='dome'||g.roof==='closed')return this.roof_bonus;
+    if(g.wind!=null&&g.wind>10)return this.wind_coef*(g.wind-10);return 0;}
+  expected(g){
+    const env=this._env(g),hfa=g.neutral?0:this.hfa;let rest=0;
+    if(g.home_rest!=null&&g.away_rest!=null)
+      rest=this.rest_coef*Math.max(-8,Math.min(8,g.home_rest-g.away_rest));
+    const h=this.base+this._o(g.home_team)+this._q(g.home_qb_id)+this._d(g.away_team)+hfa+env+rest/2;
+    const a=this.base+this._o(g.away_team)+this._q(g.away_qb_id)+this._d(g.home_team)+env-rest/2;
+    return [Math.max(h,3),Math.max(a,3)];}
+  update(g){const[mh,ma]=this.expected(g);
+    const eh=g.home_score-mh,ea=g.away_score-ma,qh=g.home_qb_id,qa=g.away_qb_id;
+    if(qh)this.qb.set(qh,(this.qb.has(qh)?this.qb.get(qh):this.qb_prior)+this.qb_gain*this.qb_share*eh);
+    this.off.set(g.home_team,this._o(g.home_team)+this.gain*(1-this.qb_share)*eh);
+    this.dfn.set(g.away_team,this._d(g.away_team)+this.gain*eh);
+    if(qa)this.qb.set(qa,(this.qb.has(qa)?this.qb.get(qa):this.qb_prior)+this.qb_gain*this.qb_share*ea);
+    this.off.set(g.away_team,this._o(g.away_team)+this.gain*(1-this.qb_share)*ea);
+    this.dfn.set(g.home_team,this._d(g.home_team)+this.gain*ea);
+    if(qh)this.qbN.set(qh,(this.qbN.get(qh)||0)+1);
+    if(qa)this.qbN.set(qa,(this.qbN.get(qa)||0)+1);
+    this.baseHist.push((g.home_score+g.away_score)/2);
+    if(this.baseHist.length>1024)this.baseHist=this.baseHist.slice(-1024);
+    const t=this.baseHist.slice(-256);
+    this.base=.995*this.base+.005*(t.reduce((s,x)=>s+x,0)/t.length);}
+  snapshot(){return{off:[...this.off],dfn:[...this.dfn],qb:[...this.qb],qbN:[...this.qbN],
+    season:this.season,base:this.base,baseHist:this.baseHist.slice(-256)};}
+  static from(s){const m=new Model();
+    m.off=new Map(s.off);m.dfn=new Map(s.dfn);m.qb=new Map(s.qb);m.qbN=new Map(s.qbN);
+    m.season=s.season;m.base=s.base;m.baseHist=(s.baseHist||[]).slice();return m;}
+}
+
+/* ============================================================
+   EMPIRICAL LAYER  (measured from this file, not assumed)
+
+   The distribution that matters is result minus line, because that is what
+   carries the real key numbers: about 2.7% of games land exactly on the
+   spread and 1.4 to 1.6% land three or seven away. It is built here in three
+   bands by total line, because scoring variance is not constant, and only
+   from seasons strictly before the one in progress so the season log stays a
+   true walk forward record.
+
+   SHRINK is the part that matters most. The model's raw disagreement with the
+   line has a slope of roughly a tenth onto the actual result, so about a tenth
+   of each point of disagreement is real and the rest is noise. Betting the
+   whole disagreement is what lost three to four points per play.
+   ============================================================ */
+function quantile(sorted,q){const i=Math.floor(q*(sorted.length-1));return sorted[i];}
+
+function buildPMF(vals){
+  const c=new Map();
+  for(const v of vals){const k=Math.round(v*2)/2;c.set(k,(c.get(k)||0)+1);}
+  const ent=[...c.entries()].sort((a,b)=>a[0]-b[0]);
+  const n=vals.length,k=new Float64Array(ent.length),p=new Float64Array(ent.length);
+  let mean=0;
+  for(let i=0;i<ent.length;i++){k[i]=ent[i][0];p[i]=ent[i][1]/n;mean+=k[i]*p[i];}
+  return{k,p,mean,n};
+}
+
+/* Exponential tilt to a target mean. Minimum relative entropy way to move the
+   mean of a discrete distribution without moving its support, which is what
+   keeps the key number atoms intact and the output continuous in the edge. */
+const tiltCache=new Map();
+function tiltTo(pmf,mu,tag){
+  const key=tag+'|'+mu.toFixed(4);
+  const hit=tiltCache.get(key);if(hit)return hit;
+  const k=pmf.k,p0=pmf.p,n=k.length,out=new Float64Array(n),log0=new Float64Array(n);
+  for(let i=0;i<n;i++)log0[i]=Math.log(p0[i]);
+  const meanAt=th=>{let mx=-Infinity;
+    for(let i=0;i<n;i++){const v=log0[i]+th*k[i];out[i]=v;if(v>mx)mx=v;}
+    let z=0;for(let i=0;i<n;i++){out[i]=Math.exp(out[i]-mx);z+=out[i];}
+    let m=0;for(let i=0;i<n;i++){out[i]/=z;m+=out[i]*k[i];}return m;};
+  let lo=-1,hi=1;
+  for(let it=0;it<44;it++){const mid=(lo+hi)/2;if(meanAt(mid)<mu)lo=mid;else hi=mid;}
+  meanAt((lo+hi)/2);
+  const res=Float64Array.from(out);
+  if(tiltCache.size>4000)tiltCache.clear();
+  tiltCache.set(key,res);return res;
+}
+function tailAbove(k,p,x){let s=0;for(let i=k.length-1;i>=0;i--){if(k[i]<=x)break;s+=p[i];}return s;}
+function tailBelow(k,p,x){let s=0;for(let i=0;i<k.length;i++){if(k[i]>=x)break;s+=p[i];}return s;}
+function atomAt(k,p,x){for(let i=0;i<k.length;i++)if(Math.abs(k[i]-x)<1e-9)return p[i];return 0;}
+
+function buildEmpirics(pre){
+  const withSp=pre.filter(g=>g.spread_line!=null);
+  const withTo=pre.filter(g=>g.total_line!=null);
+  const tl=withTo.map(g=>g.total_line).sort((a,b)=>a-b);
+  const c1=tl.length?quantile(tl,1/3):41.5, c2=tl.length?quantile(tl,2/3):45.5;
+  const band=t=>t==null?1:(t<=c1?0:(t<=c2?1:2));
+  const bands=[0,1,2].map(b=>{
+    const ms=withSp.filter(g=>band(g.total_line)===b)
+      .map(g=>(g.home_score-g.away_score)-g.spread_line);
+    const ts=withTo.filter(g=>band(g.total_line)===b)
+      .map(g=>(g.home_score+g.away_score)-g.total_line);
+    return{margin:buildPMF(ms.length>400?ms:withSp.map(g=>(g.home_score-g.away_score)-g.spread_line)),
+           total:buildPMF(ts.length>400?ts:withTo.map(g=>(g.home_score+g.away_score)-g.total_line)),
+           n:ms.length};
+  });
+  const ties=pre.filter(g=>g.home_score===g.away_score).length;
+  return{c1,c2,bands,band,tie:pre.length?ties/pre.length:0.002,nSpread:withSp.length,nTotal:withTo.length};
+}
+
+/* Slope of the actual residual on the model's disagreement. Univariate, which
+   is the same regression the old constants came from, run walk forward on this
+   file so it can never be stale. */
+function slope(x,y){const n=x.length;if(n<200)return null;
+  let mx=0,my=0;for(let i=0;i<n;i++){mx+=x[i];my+=y[i];}mx/=n;my/=n;
+  let sxy=0,sxx=0;for(let i=0;i<n;i++){const dx=x[i]-mx;sxy+=dx*(y[i]-my);sxx+=dx*dx;}
+  return sxx>0?sxy/sxx:null;}
+
+/* ============================================================
+   FIT
+   Pass 1 walks every completed game, collecting the walk forward
+   disagreement pairs and snapshotting the model where the current season
+   begins. The empirics are then built from everything before that season.
+   Pass 2 replays the current season from the snapshot so each game is
+   predicted with numbers that did not see it.
+   ============================================================ */
+function fitAll(games){
+  const done=games.filter(g=>g.home_score!=null&&g.away_score!=null)
+    .sort((x,y)=>x.season-y.season||x.week-y.week||(x.gameday<y.gameday?-1:x.gameday>y.gameday?1:0));
+  let cur=-Infinity;for(const g of games)if(g.season>cur)cur=g.season;
+
+  const m=new Model();
+  const D=[],R=[],DT=[],RT=[];
+  const pre=[];let snap=null,curGames=[];
+  for(const g of done){
+    m.roll(g.season);
+    if(g.season===cur){
+      if(!snap)snap=m.snapshot();
+      curGames.push(g);
+    } else {
+      const[h,a]=m.expected(g);
+      if(g.spread_line!=null){D.push((h-a)-g.spread_line);R.push((g.home_score-g.away_score)-g.spread_line);}
+      if(g.total_line!=null){DT.push((h+a)-g.total_line);RT.push((g.home_score+g.away_score)-g.total_line);}
+      pre.push(g);
+    }
+    m.update(g);
+  }
+  /* First season in the file, or a brand new season with nothing before it */
+  const basis=pre.length>400?pre:done;
+  const emp=buildEmpirics(basis);
+  const shrink={
+    margin:slope(D,R)??0.10, total:slope(DT,RT)??0.05,
+    n:D.length, nT:DT.length, fallback:D.length<200
+  };
+  const F={model:m,emp,shrink};
+
+  const log=[];
+  if(snap&&curGames.length){
+    const w=Model.from(snap),W={model:w,emp,shrink};
+    for(const g of curGames){log.push({g,p:predictGame(W,g)});w.update(g);}
+  }
+  return{model:m,emp,shrink,through:done[done.length-1],nfit:done.length,log,cur,
+         basisN:basis.length};
+}
+
+/* ============================================================
+   PREDICT  (pure: touches nothing on the model)
+   ============================================================ */
+function predictGame(F,g){
+  const[mh,ma]=F.model.expected(g);
+  const o={ph:mh,pa:ma,margin:mh-ma,total:mh+ma};
+  const b=F.emp.band(g.total_line), band=F.emp.bands[b];
+  o.band=b;
+
+  if(g.spread_line!=null)o.rawEdge=(mh-ma)-g.spread_line;
+  if(g.total_line!=null)o.rawTedge=(mh+ma)-g.total_line;
+  o.edge=o.rawEdge!=null?o.rawEdge*F.shrink.margin:null;
+  o.tedge=o.rawTedge!=null?o.rawTedge*F.shrink.total:null;
+
+  const bets=[];
+
+  if(g.spread_line!=null){
+    const mp=tiltTo(band.margin,band.margin.mean+o.edge,'m'+b);
+    const k=band.margin.k;
+    o.push=atomAt(k,mp,0);
+    const hw=tailAbove(k,mp,0), aw=1-hw-o.push;
+    o.cover=hw; o.coverPush=o.push;
+    const nvS=noVig(g.home_sp_odds,g.away_sp_odds);
+    bets.push(mkBet('Spread',g.home_team+' '+fmtLine(-g.spread_line),hw,aw,g.home_sp_odds,nvS?nvS[0]:null));
+    bets.push(mkBet('Spread',g.away_team+' '+fmtLine(g.spread_line),aw,hw,g.away_sp_odds,nvS?nvS[1]:null));
+
+    /* Moneyline off the same curve so all three markets agree. The atom sitting
+       on the grid at minus the line is not P(tie): it pools games whose lines
+       differed, so it is renormalized away and the observed tie rate (about
+       0.2% of games) is applied as a push instead. */
+    const hAbove=tailAbove(k,mp,-g.spread_line), aAbove=tailBelow(k,mp,-g.spread_line);
+    const z=hAbove+aAbove;
+    const hWin=(z>1e-9?hAbove/z:.5)*(1-F.emp.tie), aWin=(z>1e-9?aAbove/z:.5)*(1-F.emp.tie);
+    o.win=hWin/(hWin+aWin);
+    const nvM=noVig(g.home_ml,g.away_ml);
+    bets.push(mkBet('Moneyline',g.home_team,hWin,aWin,g.home_ml,nvM?nvM[0]:null));
+    bets.push(mkBet('Moneyline',g.away_team,aWin,hWin,g.away_ml,nvM?nvM[1]:null));
+  } else {
+    /* No line to disagree with. Centre the band on the model's own margin so
+       the win probability is at least internally consistent. */
+    const mp=tiltTo(band.margin,band.margin.mean,'m'+b), k=band.margin.k;
+    const hAbove=tailAbove(k,mp,-o.margin), aAbove=tailBelow(k,mp,-o.margin);
+    const z=hAbove+aAbove;o.win=z>1e-9?hAbove/z:.5;
+  }
+
+  if(g.total_line!=null){
+    const tp=tiltTo(band.total,band.total.mean+o.tedge,'t'+b);
+    const k=band.total.k;
+    const tpush=atomAt(k,tp,0);
+    const ov=tailAbove(k,tp,0), un=1-ov-tpush;
+    o.over=ov; o.overPush=tpush;
+    const nvT=noVig(g.over_odds,g.under_odds);
+    bets.push(mkBet('Total','Over '+g.total_line,ov,un,g.over_odds,nvT?nvT[0]:null));
+    bets.push(mkBet('Total','Under '+g.total_line,un,ov,g.under_odds,nvT?nvT[1]:null));
+  }
+
+  /* Two gates. EV says the price pays more than the risk. The no vig gate says
+     the model actually disagrees with the market rather than with the vig.
+     Rank what survives by Kelly, because a 4% edge at +450 and at -110 are not
+     the same bet. Most games should return nothing. */
+  const live=bets.filter(x=>x.ev!=null&&x.ev>=EV_BAR&&x.mktEdge!=null&&x.mktEdge>=NOVIG_BAR)
+    .map(x=>({...x,stake:Math.min(kellyOf(x.p,x.odds)*KELLY_FRAC,MAX_STAKE)}))
+    .sort((a,b)=>b.stake-a.stake);
+  o.bets=bets;
+  o.pick=live[0]||null;
+  /* Why there is no bet, told apart properly instead of always blaming the bar */
+  if(!o.pick){
+    if(!bets.length)o.why='no line';
+    else if(!bets.some(x=>x.odds!=null))o.why='not priced';
+    else{
+      const best=bets.filter(x=>x.ev!=null).sort((a,b)=>b.ev-a.ev)[0];
+      o.why='under the bar';o.best=best||null;
+    }
+  }
+  return o;}
+
+function mkBet(mkt,side,p,pOther,odds,nv){
+  const denom=p+pOther;
+  const pNoPush=denom>1e-9?p/denom:.5;
+  return{mkt,side,p,pOther,pNoPush,odds,nv,
+    ev:evPush(p,pOther,odds),
+    mktEdge:nv==null?null:pNoPush-nv};
+}
+function fmtLine(x){return x>0?'+'+x:''+x;}
+
+/* ============================================================
+   DATA
+   ============================================================ */
+const SRC='https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv';
+const KEY='gridiron.csv.v2', FITKEY='gridiron.fit.'+MODEL_VERSION, BETKEY='gridiron.bets.v1';
+let GAMES=[],FIT=null,SORT='time',VIEW='slate',SEASON=null,WEEK=null,WEEKS=null,BETS=[];
+let BANK=1000, UNIT=10, DATA_AT=null, FIT_MS=0, FIT_CACHED=false;
+
+const HAS_IDB=typeof indexedDB!=='undefined'&&indexedDB!==null;
+function idb(){return new Promise((res,rej)=>{
+  const r=indexedDB.open('gridiron',1);
+  r.onupgradeneeded=()=>r.result.createObjectStore('kv');
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error);});}
+async function cacheGet(k){
+  if(HAS_IDB){try{
+    const db=await idb();
+    return await new Promise((res,rej)=>{
+      const q=db.transaction('kv').objectStore('kv').get(k);
+      q.onsuccess=()=>res(q.result||null); q.onerror=()=>rej(q.error);});
+  }catch(e){}}
+  try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}
+}
+async function cacheSet(k,v){
+  if(HAS_IDB){try{
+    const db=await idb();
+    await new Promise((res,rej)=>{
+      const q=db.transaction('kv','readwrite').objectStore('kv').put(v,k);
+      q.onsuccess=()=>res(); q.onerror=()=>rej(q.error);});
+    return true;
+  }catch(e){}}
+  try{localStorage.setItem(k,JSON.stringify(v));return true;}catch(e){return false;}
+}
+async function cacheDel(k){
+  if(HAS_IDB){try{const db=await idb();
+    await new Promise((res,rej)=>{const q=db.transaction('kv','readwrite').objectStore('kv').delete(k);
+      q.onsuccess=()=>res();q.onerror=()=>rej(q.error);});return;}catch(e){}}
+  try{localStorage.removeItem(k);}catch(e){}
+}
+
+async function getData(force){
+  let cached=null;
+  try{cached=await cacheGet(KEY);}catch(e){}
+  const fresh=cached&&(Date.now()-cached.at)<3*3600*1000;
+  if(cached&&fresh&&!force)return{text:cached.text,at:cached.at,cached:true};
+  try{
+    const r=await fetch(SRC,{cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const text=await r.text();
+    await cacheSet(KEY,{at:Date.now(),text});
+    return{text,at:Date.now(),cached:false};
+  }catch(e){
+    if(cached)return{text:cached.text,at:cached.at,cached:true,stale:true};
+    throw e;
+  }
+}
+
+/* The fit is deterministic given the set of completed games, so it only has to
+   run when a new result lands. Keyed on the last completed game and the model
+   version, which means bumping MODEL_VERSION always invalidates it. */
+function packFit(F){
+  return{v:MODEL_VERSION,through:F.through.id,cur:F.cur,nfit:F.nfit,basisN:F.basisN,
+    model:F.model.snapshot(),shrink:F.shrink,
+    emp:{c1:F.emp.c1,c2:F.emp.c2,tie:F.emp.tie,nSpread:F.emp.nSpread,nTotal:F.emp.nTotal,
+      bands:F.emp.bands.map(b=>({n:b.n,
+        margin:{k:[...b.margin.k],p:[...b.margin.p],mean:b.margin.mean,n:b.margin.n},
+        total:{k:[...b.total.k],p:[...b.total.p],mean:b.total.mean,n:b.total.n}}))},
+    log:F.log.map(e=>({id:e.g.id,p:stripPred(e.p)}))};
+}
+function stripPred(p){const{ph,pa,margin,total,win,cover,over,edge,tedge,push,pick,why,band}=p;
+  return{ph,pa,margin,total,win,cover,over,edge,tedge,push,pick,why,band};}
+function unpackFit(c,byId){
+  if(!c||c.v!==MODEL_VERSION)return null;
+  try{
+    const emp={c1:c.emp.c1,c2:c.emp.c2,tie:c.emp.tie,nSpread:c.emp.nSpread,nTotal:c.emp.nTotal,
+      bands:c.emp.bands.map(b=>({n:b.n,
+        margin:{k:Float64Array.from(b.margin.k),p:Float64Array.from(b.margin.p),mean:b.margin.mean,n:b.margin.n},
+        total:{k:Float64Array.from(b.total.k),p:Float64Array.from(b.total.p),mean:b.total.mean,n:b.total.n}}))};
+    emp.band=t=>t==null?1:(t<=emp.c1?0:(t<=emp.c2?1:2));
+    const log=[];
+    for(const e of c.log){const g=byId.get(e.id);if(g)log.push({g,p:e.p});}
+    return{model:Model.from(c.model),emp,shrink:c.shrink,cur:c.cur,nfit:c.nfit,
+      basisN:c.basisN,through:byId.get(c.through),log};
+  }catch(e){return null;}
+}
+
+/* ============================================================
+   BET LEDGER
+   What you actually took, at the price you actually got. Accuracy is not
+   edge, and neither is the model's graded record. Closing line value over a
+   real sample is the only thing that settles the question, so the line and
+   both prices are stored at bet time and compared to the file's closing
+   numbers once the game is final.
+   ============================================================ */
+async function loadBets(){BETS=(await cacheGet(BETKEY))||[];}
+async function saveBets(){await cacheSet(BETKEY,BETS);}
+function betKey(b){return b.id+'|'+b.mkt+'|'+b.side;}
+
+function settleBet(b){
+  const g=GAMES.find(x=>x.id===b.id);
+  if(!g)return{status:'unknown'};
+  const out={status:'open',clv:null,clvUnit:null};
+  /* closing line value, measured against whatever the file now holds */
+  if(b.mkt==='Spread'&&g.spread_line!=null&&b.line!=null){
+    out.clv=b.home?(g.spread_line-b.line):(b.line-g.spread_line);out.clvUnit='pts';
+  } else if(b.mkt==='Total'&&g.total_line!=null&&b.line!=null){
+    out.clv=b.over?(g.total_line-b.line):(b.line-g.total_line);out.clvUnit='pts';
+  } else if(b.mkt==='Moneyline'&&g.home_ml!=null&&g.away_ml!=null&&b.oddsOther!=null){
+    const mine=noVig(b.odds,b.oddsOther), close=noVig(b.home?g.home_ml:g.away_ml,b.home?g.away_ml:g.home_ml);
+    if(mine&&close){out.clv=100*(close[0]-mine[0]);out.clvUnit='pts of prob';}
+  }
+  const vc=valueClv(b,g); if(vc){out.vclv=vc.v;out.shop=vc.shop;out.model=vc.model;}
+  if(g.home_score==null)return out;
+  const margin=g.home_score-g.away_score, tot=g.home_score+g.away_score;
+  let d;
+  if(b.mkt==='Moneyline'){d=margin===0?0:(b.home?margin:-margin);}
+  else if(b.mkt==='Spread'){d=b.home?margin-b.line:b.line-margin;}
+  else{d=b.over?tot-b.line:b.line-tot;}
+  out.status=Math.abs(d)<1e-9?'push':(d>0?'win':'loss');
+  out.pl=out.status==='push'?0:(out.status==='win'?b.stake*(amToDec(b.odds)-1):-b.stake);
+  return out;
+}
+
+/* ============================================================
+   PRICE ENGINE v1  (shared: Gridiron NFL, Gridiron CFB, Corner)
+
+   The one edge these apps can count on is price. A model's opinion is only
+   worth something at the price you actually get, and the price you get is
+   the best of your books, not a closing number from a schedule file. This
+   pulls every US book's moneyline, spread and total for a sport in ONE call
+   from The Odds API (cost: 1 credit per market, so 3 per refresh), keeps it
+   in IndexedDB, and answers two questions for each side of each game:
+     1. what is the best price at the books you can actually bet, and
+     2. what is the market's vig free probability, as the median across
+        every book that posts both sides at the most common line.
+
+   Each app supplies three things: a namespace for its settings, its
+   cacheGet/cacheSet, and its own mapping from an event to a game.
+   This block is identical in all three apps. Change it in one, copy it to
+   all, and bump PE_VERSION.
+   ============================================================ */
+const PE_VERSION = 1;
+const PE_API = 'https://api.the-odds-api.com/v4';
+const PE_BOOKS = [['draftkings','DraftKings','DK'],['fanduel','FanDuel','FD'],['betmgm','BetMGM','MGM'],
+  ['williamhill_us','Caesars','CZR'],['fanatics','Fanatics','FAN'],['betrivers','BetRivers','BR'],
+  ['hardrockbet','Hard Rock Bet','HR'],['espnbet','ESPN BET','ESPN'],['ballybet','Bally Bet','BAL']];
+const PE_DEFAULT_MINE = ['draftkings','fanduel','betmgm','williamhill_us','fanatics'];
+const PE_TTL = 60*60*1000;   // auto refresh at most hourly; the button refreshes on demand
+const peShort = key => { const b = PE_BOOKS.find(x => x[0] === key); return b ? b[2] : String(key||'').slice(0,4).toUpperCase(); };
+const peMedian = a => { if(!a.length) return null; const s=[...a].sort((x,y)=>x-y), m=s.length>>1; return s.length%2?s[m]:(s[m-1]+s[m])/2; };
+const peAmToProb = a => a>0 ? 100/(a+100) : -a/(-a+100);
+const peAmToDec  = a => a>0 ? 1+a/100 : 1+100/-a;
+
+function peLoadSettings(ns){
+  try{ const s = JSON.parse(localStorage.getItem(ns+'.odds')||'null');
+    if(s && Array.isArray(s.mine)) return {key:s.key||'', mine:s.mine}; }catch(e){}
+  return {key:'', mine:PE_DEFAULT_MINE.slice()};
+}
+function peSaveSettings(ns, s){ try{ localStorage.setItem(ns+'.odds', JSON.stringify(s)); }catch(e){} }
+
+/* One call for the whole sport. Returns {at, events, remaining, stale?, error?}.
+   Never throws: a failed refresh falls back to the last good pull. */
+async function peFetch(sport, settings, store, force){
+  const ck = 'pe.'+sport;
+  let cached = null; try{ cached = await store.get(ck); }catch(e){}
+  if(!settings.key) return cached ? {...cached, stale:true, error:'No Odds API key saved'} : null;
+  if(cached && !force && Date.now()-cached.at < PE_TTL) return cached;
+  try{
+    const url = `${PE_API}/sports/${sport}/odds?apiKey=${encodeURIComponent(settings.key.trim())}`
+      + `&regions=us&markets=h2h,spreads,totals&oddsFormat=american`;
+    const r = await fetch(url);
+    if(r.status===401) throw new Error('Odds API key rejected');
+    if(r.status===429) throw new Error('Odds API monthly credits used up');
+    if(!r.ok) throw new Error('Odds API error '+r.status);
+    const events = await r.json();
+    const rem = r.headers && r.headers.get ? r.headers.get('x-requests-remaining') : null;
+    const out = {at:Date.now(), events:Array.isArray(events)?events:[], remaining:rem!=null?+rem:null, sport};
+    try{ await store.set(ck, out); }catch(e){}
+    return out;
+  }catch(e){
+    return cached ? {...cached, stale:true, error:e.message} : {at:null, events:[], error:e.message, sport};
+  }
+}
+
+/* Flatten one event into per-book markets. Names are the API's team or
+   fighter names; totals use 'Over'/'Under'. */
+function peBooksOf(ev, mine){
+  return (ev.bookmakers||[]).map(bk => {
+    const o = {key:bk.key, title:bk.title, mine:mine.includes(bk.key), updated:Date.parse(bk.last_update)||null,
+               h2h:{}, spreads:{}, totals:{}};
+    for(const mk of bk.markets||[]){
+      for(const oc of mk.outcomes||[]){
+        if(mk.key==='h2h') o.h2h[oc.name] = oc.price;
+        else if(mk.key==='spreads') o.spreads[oc.name] = {price:oc.price, point:oc.point};
+        else if(mk.key==='totals') o.totals[oc.name] = {price:oc.price, point:oc.point};
+      }
+    }
+    return o;
+  });
+}
+
+/* Vig free probability of side A, as the median across books that post both
+   sides at the most common line. Returns {line, pA, n} or null.
+   kind 'h2h' ignores lines. For 'spreads' the line is side A's point. */
+function peConsensus(books, kind, a, b){
+  const rows = [];
+  for(const bk of books){
+    const A = bk[kind][a], B = bk[kind][b];
+    if(kind==='h2h'){ if(A!=null && B!=null) rows.push({line:0, A, B}); }
+    else if(A && B && A.price!=null && B.price!=null) rows.push({line:A.point, A:A.price, B:B.price});
+  }
+  if(!rows.length) return null;
+  const cnt = {}; rows.forEach(r => cnt[r.line] = (cnt[r.line]||0)+1);
+  const line = +Object.keys(cnt).sort((x,y) => cnt[y]-cnt[x] || Math.abs(x)-Math.abs(y))[0];
+  const ps = rows.filter(r => r.line===line).map(r => { const pa=peAmToProb(r.A), pb=peAmToProb(r.B); return pa/(pa+pb); });
+  return {line, pA:peMedian(ps), n:ps.length};
+}
+
+/* ---------- NFL adapter for the price engine ---------- */
+const PE_NS='gridiron.nfl', PE_SPORT='americanfootball_nfl';
+let PE_S=peLoadSettings(PE_NS), PE_DATA=null;
+const PE_STORE={get:k=>cacheGet(k), set:(k,v)=>cacheSet(k,v)};
+const NFL_NAMES={'Arizona Cardinals':'ARI','Atlanta Falcons':'ATL','Baltimore Ravens':'BAL','Buffalo Bills':'BUF',
+  'Carolina Panthers':'CAR','Chicago Bears':'CHI','Cincinnati Bengals':'CIN','Cleveland Browns':'CLE',
+  'Dallas Cowboys':'DAL','Denver Broncos':'DEN','Detroit Lions':'DET','Green Bay Packers':'GB',
+  'Houston Texans':'HOU','Indianapolis Colts':'IND','Jacksonville Jaguars':'JAX','Kansas City Chiefs':'KC',
+  'Las Vegas Raiders':'LV','Los Angeles Chargers':'LAC','Los Angeles Rams':'LA','Miami Dolphins':'MIA',
+  'Minnesota Vikings':'MIN','New England Patriots':'NE','New Orleans Saints':'NO','New York Giants':'NYG',
+  'New York Jets':'NYJ','Philadelphia Eagles':'PHI','Pittsburgh Steelers':'PIT','San Francisco 49ers':'SF',
+  'Seattle Seahawks':'SEA','Tampa Bay Buccaneers':'TB','Tennessee Titans':'TEN','Washington Commanders':'WAS'};
+
+/* Match a schedule row to an Odds API event by teams and date. Neutral site
+   games can list home and away the other way round, so both orders count. */
+function peEventFor(g){
+  if(!PE_DATA||!PE_DATA.events||!PE_DATA.events.length) return null;
+  const t=Date.parse(g.gameday+'T12:00:00-04:00');
+  for(const ev of PE_DATA.events){
+    const h=NFL_NAMES[ev.home_team], a=NFL_NAMES[ev.away_team];
+    if(!h||!a) continue;
+    if(Math.abs(Date.parse(ev.commence_time)-t)>36*3600e3) continue;
+    if(h===g.home_team&&a===g.away_team) return {ev,hn:ev.home_team,an:ev.away_team};
+    if(h===g.away_team&&a===g.home_team) return {ev,hn:ev.away_team,an:ev.home_team};
+  }
+  return null;
+}
+/* One book's lines as a schedule row, so predictGame prices it unchanged. */
+function peBookGame(g,bk,hn,an){
+  const s=bk.spreads[hn], sa=bk.spreads[an], o=bk.totals.Over, u=bk.totals.Under;
+  const sOk=s&&sa&&Math.abs(s.point+sa.point)<1e-9, tOk=o&&u&&o.point===u.point;
+  return {...g,
+    spread_line:sOk?-s.point:null, home_sp_odds:sOk?s.price:null, away_sp_odds:sOk?sa.price:null,
+    total_line:tOk?o.point:null, over_odds:tOk?o.price:null, under_odds:tOk?u.price:null,
+    home_ml:bk.h2h[hn]!=null?bk.h2h[hn]:null, away_ml:bk.h2h[an]!=null?bk.h2h[an]:null};
+}
+const peRole=(x,g)=>x.mkt==='Spread'?(x.side.startsWith(g.home_team+' ')?'sh':'sa')
+  :x.mkt==='Moneyline'?(x.side===g.home_team?'mh':'ma'):(x.side.startsWith('Over')?'ov':'un');
+const PE_ROLES=['sh','sa','mh','ma','ov','un'];
+
+/* The live version of predictGame. Model numbers come from the consensus line;
+   every side is then priced at every one of YOUR books, the best price wins,
+   and the gap is measured against the vig free consensus of ALL books at that
+   line. If no live data matches, it returns the file based result, marked. */
+function predictLive(g){
+  const m=peEventFor(g);
+  if(!m){ const p=predictGame(FIT,g); p.live=null; return p; }
+  const books=peBooksOf(m.ev,PE_S.mine), mine=books.filter(b=>b.mine);
+  const cS=peConsensus(books,'spreads',m.hn,m.an), cM=peConsensus(books,'h2h',m.hn,m.an), cT=peConsensus(books,'totals','Over','Under');
+  const gC={...g,
+    spread_line:cS?-cS.line:g.spread_line, total_line:cT?cT.line:g.total_line,
+    home_sp_odds:null,away_sp_odds:null,over_odds:null,under_odds:null,home_ml:null,away_ml:null};
+  const disp=predictGame(FIT,gC);
+  const best={};
+  for(const bk of mine){
+    const gb=peBookGame(g,bk,m.hn,m.an), pb=predictGame(FIT,gb);
+    for(const x of pb.bets){
+      if(x.odds==null) continue;
+      const role=peRole(x,g);
+      let cons=null;
+      if((role==='sh'||role==='sa')&&cS&&-gb.spread_line===cS.line) cons=role==='sh'?cS.pA:1-cS.pA;
+      else if((role==='mh'||role==='ma')&&cM) cons=role==='mh'?cM.pA:1-cM.pA;
+      else if((role==='ov'||role==='un')&&cT&&gb.total_line===cT.line) cons=role==='ov'?cT.pA:1-cT.pA;
+      const other=role==='sh'?gb.away_sp_odds:role==='sa'?gb.home_sp_odds:role==='mh'?gb.away_ml:role==='ma'?gb.home_ml:role==='ov'?gb.under_odds:gb.over_odds;
+      const nvRef=cons!=null?cons:x.nv;
+      const cand={...x, nv:nvRef, mktEdge:nvRef==null?null:x.pNoPush-nvRef, consNv:cons,
+        book:bk.key, bookTitle:bk.title, role, oddsOther:other,
+        lineVal:(role==='sh'||role==='sa')?gb.spread_line:(role==='ov'||role==='un')?gb.total_line:null};
+      if(!best[role]||cand.ev>best[role].ev) best[role]=cand;
+    }
+  }
+  const bets=PE_ROLES.map(r=>best[r]).filter(Boolean);
+  const live=bets.filter(x=>x.ev!=null&&x.ev>=EV_BAR&&x.mktEdge!=null&&x.mktEdge>=NOVIG_BAR)
+    .map(x=>({...x,stake:Math.min(kellyOf(x.p,x.odds)*KELLY_FRAC,MAX_STAKE)}))
+    .sort((a,b)=>b.stake-a.stake);
+  const o={...disp,bets,pick:live[0]||null,live:{at:PE_DATA.at,books:books.length,mine:mine.length,stale:!!PE_DATA.stale},
+    mktLine:{spread:gC.spread_line,total:gC.total_line}};
+  if(!o.pick){
+    if(!bets.length) o.why=mine.length?'not priced':'not at your books';
+    else{ o.why='under the bar'; o.best=bets.slice().sort((a,b)=>b.ev-a.ev)[0]; }
+  } else { delete o.why; delete o.best; }
+  return o;
+}
+
+/* ---------- closing value, split into shopping and model ----------
+   Closing line value in points says whether the line moved your way. Closing
+   value in dollars says what the price you took was worth against the closing
+   vig free price, and it splits exactly into two parts:
+     shopping = your price against the consensus at the moment you bet
+     model    = the consensus moving toward your side before the close
+   A line that closed at a different number is moved to your number along the
+   app's own key number curve, so a -3 against a closing -3.5 is valued right. */
+function pAtLine(g,kind,lineBet,lineClose,pCloseA){
+  if(!FIT||!FIT.emp) return null;
+  const b=FIT.emp.band(g.total_line), band=FIT.emp.bands[b];
+  const pmf=kind==='Spread'?band.margin:band.total;
+  const mp=tiltTo(pmf,pmf.mean,(kind==='Spread'?'m0':'t0')+b), k=pmf.k;
+  const P=d=>{const a=tailAbove(k,mp,d), z=a+tailBelow(k,mp,d); return z>0?a/z:.5;};
+  return Math.min(.99,Math.max(.01, pCloseA + P(lineBet-lineClose) - P(0)));
+}
+function valueClv(b,g){
+  const dec=amToDec(b.odds);
+  let p=null;
+  if(b.mkt==='Moneyline'){ const c=noVig(g.home_ml,g.away_ml); if(c) p=b.home?c[0]:c[1]; }
+  else if(b.mkt==='Spread'){ const c=noVig(g.home_sp_odds,g.away_sp_odds);
+    if(c&&g.spread_line!=null&&b.line!=null){ const pH=pAtLine(g,'Spread',b.line,g.spread_line,c[0]); if(pH!=null) p=b.home?pH:1-pH; } }
+  else { const c=noVig(g.over_odds,g.under_odds);
+    if(c&&g.total_line!=null&&b.line!=null){ const pO=pAtLine(g,'Total',b.line,g.total_line,c[0]); if(pO!=null) p=b.over?pO:1-pO; } }
+  if(p==null) return null;
+  const v=p*dec-1;
+  const shop=(b.consAtBet!=null)?b.consAtBet*dec-1:null;
+  return {v, shop, model:shop!=null?v-shop:null};
+}
+function meanCI(xs){ const n=xs.length; if(n<2) return null;
+  const m=xs.reduce((a,x)=>a+x,0)/n, sd=Math.sqrt(xs.reduce((a,x)=>a+(x-m)*(x-m),0)/(n-1)), se=sd/Math.sqrt(n);
+  return {n,m,lo:m-1.96*se,hi:m+1.96*se}; }
+const ciTxt=c=>c?`${c.m>=0?'+':''}${(100*c.m).toFixed(1)}% (95% range ${(100*c.lo).toFixed(1)} to ${(100*c.hi).toFixed(1)}, n=${c.n})`:'n/a';
+
+function priceStatus(){
+  if(!PE_S.key) return 'No key: prices below are the schedule file\'s closing numbers, which you cannot bet.';
+  if(!PE_DATA||!PE_DATA.at) return PE_DATA&&PE_DATA.error?PE_DATA.error:'Not pulled yet.';
+  const mins=Math.round((Date.now()-PE_DATA.at)/60000);
+  return `${PE_DATA.events.length} games, pulled ${mins<1?'just now':mins+' min ago'}`
+    +(PE_DATA.remaining!=null?`, ${PE_DATA.remaining} credits left`:'')
+    +(PE_DATA.error?` (${PE_DATA.error}, showing last good pull)`:'');
+}
+async function refreshPrices(force){
+  PE_DATA=await peFetch(PE_SPORT,PE_S,PE_STORE,force);
+  const st=$('peStatus'); if(st) st.textContent=priceStatus();
+  if(FIT&&LAST_STAMP) stamp(LAST_STAMP);
+  if(FIT&&VIEW==='slate') renderSlate();
+}
+function renderPricePanel(){
+  $('peKey').value=PE_S.key||'';
+  $('peBooks').innerHTML=PE_BOOKS.map(([k,n])=>`<label><input type="checkbox" value="${k}" ${PE_S.mine.includes(k)?'checked':''}>${n}</label>`).join('');
+  $('peStatus').textContent=priceStatus();
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const $=id=>document.getElementById(id);
+const fmt=n=>(n>0?'+':'')+n.toFixed(1);
+const pct=n=>(100*n).toFixed(0)+'%';
+const pct1=n=>(100*n).toFixed(1)+'%';
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const money=f=>'$'+(BANK*f).toFixed(0);
+const units=f=>(BANK*f/UNIT).toFixed(1)+'u';
+
+function kickoff(g){
+  const d=new Date(g.gameday+'T12:00:00');
+  const day=d.toLocaleDateString(undefined,{weekday:'short',month:'numeric',day:'numeric'});
+  if(!g.gametime)return day;
+  let[h,m]=g.gametime.split(':').map(Number);
+  const ap=h>=12?'pm':'am';h=h%12||12;
+  return day+', '+h+':'+String(m).padStart(2,'0')+ap+' ET';
+}
+
+function weekList(){
+  if(WEEKS)return WEEKS;
+  const up=GAMES.filter(g=>g.home_score==null);
+  let minUp=Infinity;for(const g of up)if(g.season<minUp)minUp=g.season;
+  const floor=(up.length?minUp:9999)-1;
+  const seen=new Map();
+  for(const g of GAMES){
+    if(g.season<floor)continue;
+    seen.set(g.season+'-'+g.week,{s:g.season,w:g.week});
+  }
+  return WEEKS=[...seen.values()].sort((a,b)=>a.s-b.s||a.w-b.w);
+}
+
+function renderSlate(){
+  const el=$('slate');
+  let slate=GAMES.filter(g=>g.season===SEASON&&g.week===WEEK);
+  if(!slate.length){el.innerHTML='<p class="note">No games scheduled for this week.</p>';return;}
+
+  /* Weeks 1 to 4 are the model's weakest stretch. Ratings have just taken the
+     offseason shrink and there is little current-season evidence. */
+  const early=WEEK<=4?`<div class="callout">
+    <b>Early season.</b> Ratings just took the offseason shrink and have little
+    current-season evidence behind them. These are the widest uncertainty
+    predictions of the year, and last season's carryover is doing most of the work.
+    </div>`:'';
+
+  const rows=slate.map(g=>({g,p:predictLive(g)}));
+  if(SORT==='stake')rows.sort((a,b)=>(b.p.pick?.stake??-1)-(a.p.pick?.stake??-1)||Math.abs(b.p.edge??0)-Math.abs(a.p.edge??0));
+  else rows.sort((a,b)=>(a.g.gameday+(a.g.gametime||'')).localeCompare(b.g.gameday+(b.g.gametime||'')));
+
+  const flagged=rows.filter(r=>r.p.pick).length;
+  const head=`<div class="callout"><b>${flagged} of ${rows.length}</b> games clear both gates
+    (${pct1(EV_BAR)} expected value and ${(100*NOVIG_BAR).toFixed(0)} points over the vig free
+    price). Most weeks should be mostly empty. Stakes are quarter Kelly capped at
+    ${(100*MAX_STAKE).toFixed(0)}% of bankroll, and a spread and a moneyline on the same
+    team are the same opinion, so do not stack them.</div>`;
+
+  el.innerHTML=early+head+rows.map(({g,p},i)=>{
+    const done=g.home_score!=null;
+    const sl=p.live?p.mktLine.spread:g.spread_line, tl=p.live?p.mktLine.total:g.total_line;
+    const res=done?`<div class="score">Final ${g.away_score} to ${g.home_score}</div>`:'';
+    let call;
+    if(p.pick){
+      const b=p.pick;
+      call=`<div class="edge">
+        <span class="edgeN bet">${esc(b.side)}</span>
+        <span class="edgeL">${b.mkt} ${b.odds>0?'+':''}${b.odds}${b.book?' at '+peShort(b.book):''}</span>
+        <span class="edgeL">${pct1(b.ev)} EV &middot; ${(100*b.mktEdge).toFixed(1)} pts over no vig</span>
+        <span class="edgeL">${(100*b.stake).toFixed(2)}% &middot; ${money(b.stake)} &middot; ${units(b.stake)}</span>
+      </div>`;
+    } else if(p.why==='no line'){
+      call=`<div class="edge"><span class="edgeN none">no line</span>
+        <span class="edgeL">nothing to disagree with</span></div>`;
+    } else if(p.why==='not priced'){
+      call=`<div class="edge"><span class="edgeN none">not priced</span>
+        <span class="edgeL">upstream file has no odds for this game</span></div>`;
+    } else if(p.why==='not at your books'){
+      call=`<div class="edge"><span class="edgeN none">not offered</span>
+        <span class="edgeL">none of your books has this game yet</span></div>`;
+    } else {
+      const b=p.best;
+      call=`<div class="edge"><span class="edgeN none">no bet</span>
+        <span class="edgeL">best is ${b?esc(b.side)+' at '+pct1(b.ev)+' EV':'nothing'}</span>
+        <span class="edgeL">${b&&b.mktEdge!=null?(100*b.mktEdge).toFixed(1)+' pts over no vig, under the gate':'under the gate'}</span></div>`;
+    }
+    return `
+<article class="game">
+  <div class="head" role="button" tabindex="0" data-i="${i}" aria-expanded="false" aria-controls="d${i}">
+    <div>
+      <div class="match">${esc(g.away_team)} at ${esc(g.home_team)}</div>
+      <div class="when">${kickoff(g)}${done?' &middot; final':''}</div>
+      <div class="score">${p.pa.toFixed(1)} <span>to</span> ${p.ph.toFixed(1)} <span>projected</span></div>
+      ${res}
+    </div>
+    ${call}
+  </div>
+  <div class="strip">
+    <div class="cell">
+      <h4>${esc(g.home_team)} spread</h4>
+      <div class="pair">
+        <span class="mv">${fmtLine(Number((-p.margin).toFixed(1)))}<small>model</small></span>
+        <span class="kv">${sl!=null?fmtLine(-sl):'not priced'}<small>market</small></span>
+      </div>
+    </div>
+    <div class="cell">
+      <h4>Total points</h4>
+      <div class="pair">
+        <span class="mv">${p.total.toFixed(1)}<small>model</small></span>
+        <span class="kv">${tl!=null?tl.toFixed(1):'not priced'}<small>market</small></span>
+      </div>
+    </div>
+  </div>
+  <div class="detail" id="d${i}">
+    <div class="grid">
+      <div class="stat"><b>${pct(p.win)}</b><span>${esc(g.home_team)} win</span></div>
+      <div class="stat"><b>${p.cover!=null?pct(p.cover):'n/a'}</b><span>${esc(g.home_team)} covers${p.push?' ('+pct1(p.push)+' push)':''}</span></div>
+      <div class="stat"><b>${p.over!=null?pct(p.over):'n/a'}</b><span>over ${tl??''}</span></div>
+    </div>
+    <div class="bars">
+      ${bar(g.away_team,p.pa,40)}
+      ${bar(g.home_team,p.ph,40)}
+    </div>
+    ${boardTable(p)}
+    <div class="qbs">
+      <b>${esc(g.away_team)}</b> ${esc(g.away_qb_name||'quarterback unlisted')}<br>
+      <b>${esc(g.home_team)}</b> ${esc(g.home_qb_name||'quarterback unlisted')}
+      ${p.edge!=null?`<br>Raw disagreement ${fmt(p.rawEdge)} pts, shrunk to ${fmt(p.edge)} at a slope of ${FIT.shrink.margin.toFixed(3)}.`:''}
+      ${p.tedge!=null?`<br>Total runs ${fmt(p.rawTedge)} raw, ${fmt(p.tedge)} shrunk, against the market number.`:''}
+      ${g.wind!=null&&g.wind>10?`<br>Wind ${g.wind} mph, scoring adjusted down.`:''}
+      ${g.roof==='dome'||g.roof==='closed'?'<br>Indoors, scoring adjusted up.':''}
+      <br>Variance band ${['low','middle','high'][p.band]} by total line.
+    </div>
+    ${p.pick&&!done?logForm(g,p,i):''}
+  </div>
+</article>`;}).join('');
+
+  el.querySelectorAll('.head').forEach(h=>{
+    const go=()=>{const d=$('d'+h.dataset.i);const open=d.classList.toggle('open');
+      h.setAttribute('aria-expanded',open);};
+    h.addEventListener('click',go);
+    h.addEventListener('keydown',ev=>{if(ev.key==='Enter'||ev.key===' '){ev.preventDefault();go();}});
+  });
+  el.querySelectorAll('[data-log]').forEach(btn=>{
+    btn.addEventListener('click',async ev=>{
+      ev.stopPropagation();
+      const i=btn.dataset.log;
+      const price=Number($('price'+i).value), stake=Number($('stake'+i).value);
+      if(!price||!stake){btn.textContent='Enter a price';return;}
+      const r=rows[i];await addBet(r.g,r.p.pick,price,stake/100);
+      btn.textContent='Logged';btn.disabled=true;
+    });
+  });
+  $('bankNote').textContent=`1 unit = $${UNIT}. Max single bet ${(100*MAX_STAKE).toFixed(0)}% = ${money(MAX_STAKE)}.`;
+}
+
+function boardTable(p){
+  if(!p.bets||!p.bets.length)return '';
+  const live=!!p.live;
+  return `<div class="board"><table>
+    <thead><tr><th>Side</th><th>Price</th>${live?'<th>Book</th>':''}<th>Model</th><th>No vig</th><th>Gap</th><th>EV</th></tr></thead>
+    <tbody>${p.bets.map(b=>`<tr>
+      <td>${esc(b.side)}<div style="font-size:11px;color:var(--dim);font-weight:400">${b.mkt}</div></td>
+      <td>${b.odds==null?'n/a':(b.odds>0?'+':'')+b.odds}</td>
+      ${live?`<td>${esc(peShort(b.book))}</td>`:''}
+      <td class="mv">${pct1(b.pNoPush)}</td>
+      <td class="kv">${b.nv==null?'n/a':pct1(b.nv)}</td>
+      <td class="${b.mktEdge!=null&&b.mktEdge>=NOVIG_BAR?'win':''}">${b.mktEdge==null?'n/a':(100*b.mktEdge).toFixed(1)}</td>
+      <td class="${b.ev!=null&&b.ev>=EV_BAR?'win':''}">${b.ev==null?'n/a':pct1(b.ev)}</td>
+    </tr>`).join('')}</tbody></table>
+    <p style="color:var(--dim);font-size:11.5px;margin:6px 0 0">${live
+      ? `Best price at your books, from ${p.live.books} books pulled ${Math.max(0,Math.round((Date.now()-p.live.at)/60000))} min ago${p.live.stale?' (last good pull)':''}. No vig is the median across every book at the most common line.`
+      : `Prices are the schedule file's closing numbers, which you cannot bet. Add an Odds API key under Live prices to price this at your books.`}
+    Gap is the model minus the vig free price, in points of probability. It has to reach ${(100*NOVIG_BAR).toFixed(0)} before EV counts.</p></div>`;
+}
+
+function logForm(g,p,i){
+  const b=p.pick;
+  return `<div class="logbet">
+    <span>Log at your price</span>
+    <input id="price${i}" type="number" inputmode="numeric" step="1" value="${b.odds}" aria-label="Price you got">
+    <input id="stake${i}" type="number" inputmode="decimal" step="0.01" value="${(100*b.stake).toFixed(2)}" aria-label="Stake percent of bankroll">
+    <span>% of roll</span>
+    <button data-log="${i}">Log bet</button>
+  </div>`;
+}
+
+async function addBet(g,b,price,stake){
+  const home=(b.mkt==='Moneyline')?b.side===g.home_team:
+    (b.mkt==='Spread')?b.side.startsWith(g.home_team+' '):null;
+  const over=b.mkt==='Total'?b.side.startsWith('Over'):null;
+  let oddsOther=b.oddsOther!=null?b.oddsOther:null;
+  if(oddsOther==null){
+    if(b.mkt==='Moneyline')oddsOther=home?g.away_ml:g.home_ml;
+    else if(b.mkt==='Spread')oddsOther=home?g.away_sp_odds:g.home_sp_odds;
+    else oddsOther=over?g.under_odds:g.over_odds;
+  }
+  const line=b.lineVal!=null?b.lineVal:(b.mkt==='Spread'?g.spread_line:(b.mkt==='Total'?g.total_line:null));
+  /* The consensus at bet time is scaled to the price you actually got only if
+     you logged the price the app found; a different price keeps the consensus
+     as it was, which is correct: shopping is your price against the market. */
+  const rec={id:g.id,season:g.season,week:g.week,
+    label:g.away_team+' at '+g.home_team,mkt:b.mkt,side:b.side,
+    line,home,over,odds:price,oddsOther,stake,modelP:b.pNoPush,nv:b.nv,
+    book:b.book||null,consAtBet:b.consNv!=null?b.consNv:null,live:!!b.book,ts:Date.now()};
+  const k=betKey(rec);
+  BETS=BETS.filter(x=>betKey(x)!==k);BETS.push(rec);
+  await saveBets();
+  if(VIEW==='bets')renderBets();
+}
+
+function bar(team,val,max){
+  const w=Math.max(2,Math.min(100,100*val/max));
+  return `<div class="brow"><span>${esc(team)}</span>
+    <span class="track"><span class="fill" style="width:${w}%;background:var(--model)"></span></span>
+    <span style="text-align:right">${val.toFixed(1)}</span></div>`;
+}
+
+function renderRatings(){
+  const m=FIT.model;
+  const teams=[...new Set(GAMES.filter(g=>g.season===SEASON).flatMap(g=>[g.home_team,g.away_team]))];
+  const qbByTeam={};
+  for(const g of GAMES.filter(g=>g.season===SEASON)){
+    if(g.home_qb_id)qbByTeam[g.home_team]={id:g.home_qb_id,name:g.home_qb_name};
+    if(g.away_qb_id)qbByTeam[g.away_team]={id:g.away_qb_id,name:g.away_qb_name};
+  }
+  let rows=teams.map(t=>{
+    const off=m._o(t), def=m._d(t);
+    const q=qbByTeam[t], qr=q?m._q(q.id):m.qb_prior;
+    return{t,off,def,qb:qr,qbName:q?q.name:'not listed',net:off+qr-def};
+  });
+  const k=$('ratingSort').value;
+  rows.sort((a,b)=> k==='team'? a.t.localeCompare(b.t)
+    : k==='def'? a.def-b.def : b[k]-a[k]);
+  const cl=v=>v>=0?'pos':'neg';
+  $('ratings').innerHTML=`<table>
+    <thead><tr><th>Team</th><th>Offense</th><th>Defense</th><th>QB</th><th>Net</th></tr></thead>
+    <tbody>${rows.map(r=>`<tr>
+      <td>${esc(r.t)}<div style="font-size:11.5px;color:var(--dim);font-weight:400">${esc(r.qbName)}</div></td>
+      <td class="${cl(r.off)}">${fmt(r.off)}</td>
+      <td class="${cl(-r.def)}">${fmt(r.def)}</td>
+      <td class="${cl(r.qb)}">${fmt(r.qb)}</td>
+      <td class="${cl(r.net)}"><b>${fmt(r.net)}</b></td>
+    </tr>`).join('')}</tbody></table>
+    <p class="note" style="padding:14px 2px">Points per game above or below an average team.
+    Defense is points allowed relative to average, so a negative number is a better defense.
+    Net combines offense and quarterback minus defense.</p>`;
+}
+
+function renderLog(){
+  const L=FIT.log;
+  const el=$('log');
+  if(!L.length){
+    el.innerHTML=`<p class="note">No completed games yet in ${FIT.cur}.
+      Once games are played, every one of them gets scored here against what the
+      model predicted beforehand.</p>`;
+    return;
+  }
+  let mlN=0,mlW=0, atsN=0,atsW=0, ouN=0,ouW=0, mae=0, mktMae=0, mktN=0, tmae=0;
+  const bins=Array.from({length:5},()=>({p:0,w:0,n:0}));
+  /* grading the RULE, not just the predictions */
+  let gN=0,gW=0,gL=0,gP=0,gStake=0,gRet=0,gNoPrice=0;
+  const byMkt={};
+
+  for(const{g,p} of L){
+    const homeWon=g.home_score>g.away_score;
+    if(g.home_score!==g.away_score){
+      mlN++; if((p.win>.5)===homeWon)mlW++;
+      const b=Math.min(4,Math.floor(Math.abs(p.win-.5)/.1));
+      bins[b].n++; bins[b].p+=Math.max(p.win,1-p.win);
+      bins[b].w+=((p.win>.5)===homeWon)?1:0;
+    }
+    mae+=Math.abs((g.home_score-g.away_score)-p.margin);
+    tmae+=Math.abs((g.home_score+g.away_score)-p.total);
+    if(g.spread_line!=null){
+      mktN++; mktMae+=Math.abs((g.home_score-g.away_score)-g.spread_line);
+      const covered=(g.home_score-g.away_score)>g.spread_line;
+      if((g.home_score-g.away_score)!==g.spread_line){
+        atsN++; if((p.cover>.5)===covered)atsW++;
+      }
+    }
+    if(g.total_line!=null){
+      const tot=g.home_score+g.away_score;
+      if(tot!==g.total_line){ouN++; if((p.over>.5)===(tot>g.total_line))ouW++;}
+    }
+    if(p.pick){
+      const r=gradePick(g,p.pick);
+      if(r==null){gNoPrice++;}
+      else{
+        gN++;gStake+=p.pick.stake;gRet+=r.pl;
+        if(r.status==='win')gW++;else if(r.status==='loss')gL++;else gP++;
+        const mk=byMkt[p.pick.mkt]||(byMkt[p.pick.mkt]={n:0,u:0});
+        mk.n++;mk.u+=r.unit;
+      }
+    }
+  }
+  const n=L.length;
+  const rate=(w,t)=>t?((100*w/t).toFixed(1)+'%'):'n/a';
+
+  const graded=gN<20
+    ? `<div class="callout"><b>${gN} bet${gN===1?'':'s'} settled.</b> Too few to read.
+       This is the number that decides whether any of the rest matters, and it needs a
+       real sample before it means anything. ${gNoPrice?gNoPrice+' flagged game(s) had no price to grade.':''}</div>`
+    : `<div class="callout">
+       <b>Flagged bets: ${gW}-${gL}-${gP} for ${(gRet*100).toFixed(2)}% of bankroll</b>
+       on ${(gStake*100).toFixed(2)}% risked, a return of
+       ${(100*gRet/gStake).toFixed(1)}% of the amount risked over ${gN} bets.
+       ${Object.entries(byMkt).map(([k,v])=>k+' '+v.n+' bets '+(100*v.u/v.n).toFixed(1)+'% flat').join(' &middot; ')}
+       ${gNoPrice?' &middot; '+gNoPrice+' unpriced':''}</div>`;
+
+  const rows=[...L].reverse().map(({g,p})=>{
+    const am=g.home_score-g.away_score, err=Math.abs(am-p.margin);
+    const hit=g.home_score!==g.away_score?((p.win>.5)===(g.home_score>g.away_score)):null;
+    const r=p.pick?gradePick(g,p.pick):null;
+    return `<tr>
+      <td>${esc(g.away_team)} at ${esc(g.home_team)}
+        <div style="font-size:11.5px;color:var(--dim);font-weight:400">week ${g.week}${
+          p.pick?' &middot; '+esc(p.pick.side):''}</div></td>
+      <td class="kv">${g.away_score}-${g.home_score}</td>
+      <td class="mv">${p.pa.toFixed(1)}-${p.ph.toFixed(1)}</td>
+      <td class="${err>=14?'neg':''}">${err.toFixed(1)}</td>
+      <td>${hit===null?'n/a':hit?'yes':'no'}</td>
+      <td class="${r?(r.status==='win'?'win':r.status==='loss'?'loss':''):''}">${
+        r?(r.status==='push'?'push':r.status+' '+(r.unit>0?'+':'')+r.unit.toFixed(2)+'u'):'no bet'}</td>
+    </tr>`;}).join('');
+
+  el.innerHTML=`
+  <p class="note" style="padding:4px 2px 14px">Every ${FIT.cur} game scored against
+  what the model said <b>before</b> it was played, using empirics built only from
+  seasons before this one. These numbers are the model's live record, not a backtest.</p>
+  ${graded}
+  <h3>How close were the numbers</h3>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr)">
+    <div class="stat"><b>${rate(mlW,mlN)}</b><span>winner picked (${mlW} of ${mlN})</span></div>
+    <div class="stat"><b>${(mae/n).toFixed(1)}</b><span>avg margin miss</span></div>
+    <div class="stat"><b>${mktN?(mktMae/mktN).toFixed(1):'n/a'}</b><span>market margin miss</span></div>
+    <div class="stat"><b>${rate(atsW,atsN)}</b><span>spread side (${atsW} of ${atsN})</span></div>
+    <div class="stat"><b>${rate(ouW,ouN)}</b><span>over/under (${ouW} of ${ouN})</span></div>
+    <div class="stat"><b>${(tmae/n).toFixed(1)}</b><span>avg total miss</span></div>
+  </div>
+
+  <h3>Is it as confident as it should be</h3>
+  <div class="bars">${bins.map((b,i)=>{
+    if(!b.n)return '';
+    const said=100*b.p/b.n, got=100*b.w/b.n;
+    const thin=b.n<20;
+    return `<div class="brow" style="grid-template-columns:74px 1fr 104px">
+      <span class="mv">${said.toFixed(0)}% said</span>
+      <span class="track"><span class="fill" style="width:${Math.min(100,got)}%;
+        background:${!thin&&Math.abs(said-got)>15?'var(--hot)':'var(--market)'}"></span></span>
+      <span class="kv" style="text-align:right">${got.toFixed(0)}% won, n=${b.n}${thin?'*':''}</span>
+    </div>`;}).join('')||'<p class="note">Not enough games yet.</p>'}</div>
+  <p class="note" style="padding:6px 2px 0;font-size:13px">When the two columns
+  track each other, the model's confidence is honest. Bins marked * have fewer than
+  twenty games and are noise. A gap that persists past thirty or forty games is the
+  signal to re-fit.</p>
+
+  <h3>Game by game</h3>
+  <table><thead><tr><th>Game</th><th>Actual</th><th>Model</th><th>Miss</th><th>Right</th><th>Bet</th></tr></thead>
+  <tbody>${rows}</tbody></table>`;
+}
+
+/* Settle a flagged pick at the price stored on the game row. Returns null when
+   there was no price to grade against. */
+function gradePick(g,b){
+  if(b.odds==null)return null;
+  const margin=g.home_score-g.away_score, tot=g.home_score+g.away_score;
+  let d;
+  if(b.mkt==='Moneyline'){const home=b.side===g.home_team;d=margin===0?0:(home?margin:-margin);}
+  else if(b.mkt==='Spread'){const home=b.side.startsWith(g.home_team+' ');
+    d=home?margin-g.spread_line:g.spread_line-margin;}
+  else{const over=b.side.startsWith('Over');d=over?tot-g.total_line:g.total_line-tot;}
+  const status=Math.abs(d)<1e-9?'push':(d>0?'win':'loss');
+  const unit=status==='push'?0:(status==='win'?amToDec(b.odds)-1:-1);
+  return{status,unit,pl:unit*b.stake};
+}
+
+function renderBets(){
+  const el=$('bets');
+  if(!BETS.length){
+    el.innerHTML=`<p class="note">No bets logged. Open a game on the slate that clears
+      both gates, type the price you actually got, and log it. The model's own graded
+      record lives in the season log; this tab is about what you took, and whether you
+      beat the closing number.</p>`;
+    return;
+  }
+  const rows=[...BETS].sort((a,b)=>b.ts-a.ts).map(b=>({b,r:settleBet(b)}));
+  let n=0,w=0,l=0,p=0,stake=0,ret=0,clvN=0,clvSum=0,clvBeat=0;
+  for(const{b,r} of rows){
+    if(r.status==='win'||r.status==='loss'||r.status==='push'){
+      n++;stake+=b.stake;ret+=r.pl;
+      if(r.status==='win')w++;else if(r.status==='loss')l++;else p++;
+    }
+    if(r.clv!=null&&r.clvUnit==='pts'){clvN++;clvSum+=r.clv;if(r.clv>0)clvBeat++;}
+  }
+  const open=rows.length-n;
+  const head=`<div class="callout">
+    ${n?`<b>${w}-${l}-${p}</b> settled, ${(100*ret).toFixed(2)}% of bankroll on ${(100*stake).toFixed(2)}% risked (${(100*ret/stake).toFixed(1)}% of risk).`
+       :`<b>${open} bet${open===1?'':'s'} open</b>, none settled yet.`}
+    ${clvN>=20
+      ? `Closing line value: beat the close on ${clvBeat} of ${clvN} point-line bets, average ${clvSum>=0?'+':''}${(clvSum/clvN).toFixed(2)} points.`
+      : `Closing line value needs about twenty point-line bets before it says anything. You have ${clvN}.`}
+    <br><span style="color:var(--dim)">The closing number comes from the nflverse file, which
+    updates periodically, so a bet logged late in the week is being compared against a number
+    close to the one you already took. Treat early-week logs as the honest ones.</span></div>`;
+  /* Closing value in dollars per dollar risked, by market, and split into the
+     price you shopped versus the market moving your way. You mostly bet
+     moneylines and spreads, so those are the rows that matter; a market whose
+     range sits below zero after fifty bets is one to stop betting. */
+  const byMkt=['Moneyline','Spread','Total'].map(mk=>{
+    const xs=rows.filter(({b,r})=>b.mkt===mk&&r.vclv!=null);
+    const sp=xs.filter(({r})=>r.shop!=null);
+    return {mk,all:meanCI(xs.map(({r})=>r.vclv)),n:xs.length,
+      shop:meanCI(sp.map(({r})=>r.shop)),model:meanCI(sp.map(({r})=>r.model)),ns:sp.length};
+  });
+  const allV=meanCI(rows.filter(({r})=>r.vclv!=null).map(({r})=>r.vclv));
+  const splitRows=rows.filter(({r})=>r.shop!=null);
+  const allS=meanCI(splitRows.map(({r})=>r.shop)), allM=meanCI(splitRows.map(({r})=>r.model));
+  let verdict='';
+  if(allV&&allV.n>=50){
+    if(allV.hi<0) verdict=`<b>Losing to the close</b> across ${allV.n} bets, whole range below zero. That is not variance.`;
+    else if(allV.lo>0) verdict=`<b>Beating the close</b> across ${allV.n} bets, whole range above zero. That is what an edge looks like.`;
+    else verdict=`The range still spans zero after ${allV.n} bets, so nothing is settled yet.`;
+  } else verdict=`Closing value needs about fifty bets before the range means anything. You have ${allV?allV.n:0}.`;
+  if(allS&&allM&&splitRows.length>=40){
+    if(allS.lo>0&&allM.hi<0.002) verdict+=` The value is coming from <b>shopping</b>, not the model: keep carrying books, and treat the model as a filter at best.`;
+    else if(allM.lo>0) verdict+=` The <b>model's side</b> is moving the market on its own, which is the rarer half. Protect it.`;
+  }
+  const split=`<div class="callout" style="border-left-color:var(--market)">
+    <b>Closing value, by market</b><br>
+    ${byMkt.map(x=>`${x.mk}: ${ciTxt(x.all)}${x.ns?`<br><span style="color:var(--dim)">&nbsp;&nbsp;shopping ${ciTxt(x.shop)} &middot; model ${ciTxt(x.model)}</span>`:''}`).join('<br>')}
+    <br><br>${verdict}
+    <br><span style="color:var(--dim)">Shopping is the price you got against the vig free consensus when you bet.
+    Model is the consensus moving toward your side before the close. They add up to the closing value.
+    Only bets logged with live prices can be split.</span></div>`;
+  el.innerHTML=head+split+`<table>
+    <thead><tr><th>Bet</th><th>Price</th><th>Stake</th><th>CLV</th><th>Result</th></tr></thead>
+    <tbody>${rows.map(({b,r})=>`<tr>
+      <td>${esc(b.side)}<div style="font-size:11.5px;color:var(--dim);font-weight:400">${esc(b.label)} &middot; ${b.mkt} &middot; wk ${b.week}</div></td>
+      <td>${b.odds>0?'+':''}${b.odds}${b.line!=null?'<div style="font-size:11px;color:var(--dim);font-weight:400">at '+b.line+'</div>':''}</td>
+      <td>${(100*b.stake).toFixed(2)}%<div style="font-size:11px;color:var(--dim);font-weight:400">${units(b.stake)}</div></td>
+      <td class="${(r.vclv!=null?r.vclv:r.clv)==null?'':(r.vclv!=null?r.vclv:r.clv)>0?'win':'loss'}">${r.vclv!=null?(r.vclv>0?'+':'')+(100*r.vclv).toFixed(1)+'%':r.clv==null?'n/a':(r.clv>0?'+':'')+r.clv.toFixed(2)}${b.book?`<div style="font-size:11px;color:var(--dim);font-weight:400">${esc(peShort(b.book))}</div>`:''}</td>
+      <td class="${r.status==='win'?'win':r.status==='loss'?'loss':''}">${
+        r.status==='open'?'open':r.status==='push'?'push':r.status+' '+(r.pl>0?'+':'')+(100*r.pl).toFixed(2)+'%'}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+/* ============================================================
+   BOOT
+   ============================================================ */
+function fillWeeks(){
+  const ws=weekList();
+  $('weekSel').innerHTML=ws.map(w=>
+    `<option value="${w.s}-${w.w}"${w.s===SEASON&&w.w===WEEK?' selected':''}>${w.s} week ${w.w}</option>`).join('');
+  const i=ws.findIndex(w=>w.s===SEASON&&w.w===WEEK);
+  $('prev').disabled=i<=0; $('next').disabled=i<0||i>=ws.length-1;
+}
+function step(d){
+  const ws=weekList(), i=ws.findIndex(w=>w.s===SEASON&&w.w===WEEK)+d;
+  if(i<0||i>=ws.length)return;
+  SEASON=ws[i].s;WEEK=ws[i].w;fillWeeks();renderSlate();
+}
+function switchView(v){
+  VIEW=v;
+  $('slateView').style.display=v==='slate'?'':'none';
+  $('ratingsView').style.display=v==='ratings'?'':'none';
+  $('logView').style.display=v==='log'?'':'none';
+  $('betsView').style.display=v==='bets'?'':'none';
+  $('tabSlate').classList.toggle('on',v==='slate');
+  $('tabRatings').classList.toggle('on',v==='ratings');
+  $('tabLog').classList.toggle('on',v==='log');
+  $('tabBets').classList.toggle('on',v==='bets');
+  if(v==='ratings')renderRatings();
+  if(v==='log')renderLog();
+  if(v==='bets')renderBets();
+}
+
+let LAST_STAMP=null;
+function stamp(d){
+  LAST_STAMP=d;
+  const s=FIT.shrink;
+  $('sub').textContent=`Fit through ${FIT.through.season} week ${FIT.through.week}`
+    +` on ${FIT.nfit.toLocaleString()} games`;
+  $('foot2').textContent=`Data ${d.cached?'from cache':'refreshed'} `
+    +new Date(d.at).toLocaleString()+(d.stale?' (network unavailable)':'')
+    +`. Ratings ${FIT_CACHED?'restored from cache':'rebuilt'} in ${FIT_MS} ms.`;
+  $('foot3').textContent=`Model ${MODEL_VERSION}. Shrink measured on this file, not pasted in: `
+    +`margin ${s.margin.toFixed(3)} on ${s.n.toLocaleString()} games, `
+    +`total ${s.total.toFixed(3)} on ${s.nT.toLocaleString()}. `
+    +`Residual bands split at total lines ${FIT.emp.c1} and ${FIT.emp.c2}. `
+    +(PE_DATA&&PE_DATA.at&&PE_DATA.events&&PE_DATA.events.length
+       ?`Prices come from your books via The Odds API${PE_DATA.stale?' (last good pull)':''}; confirm the number at the book before you bet.`
+       :`Prices are the nflverse closing columns, not your book: confirm before you bet.`);
+}
+
+async function boot(force){
+  try{
+    if(force){$('slate').innerHTML='<div class="skel"></div><div class="skel"></div><div class="skel"></div>';}
+    const d=await getData(force);
+    DATA_AT=d.at;
+    GAMES=parseCSV(d.text);
+    WEEKS=null;tiltCache.clear();
+    const byId=new Map(GAMES.map(g=>[g.id,g]));
+
+    const t0=performance.now();
+    let cached=null;
+    try{cached=unpackFit(await cacheGet(FITKEY),byId);}catch(e){}
+    const lastDone=GAMES.filter(g=>g.home_score!=null)
+      .sort((x,y)=>x.season-y.season||x.week-y.week||(x.gameday<y.gameday?-1:1)).pop();
+    if(cached&&cached.through&&lastDone&&cached.through.id===lastDone.id){
+      FIT=cached;FIT_CACHED=true;
+    } else {
+      FIT=fitAll(GAMES);FIT_CACHED=false;
+      cacheSet(FITKEY,packFit(FIT));
+    }
+    FIT_MS=Math.round(performance.now()-t0);
+
+    const up=GAMES.filter(g=>g.home_score==null);
+    if(up.length){SEASON=Math.min(...up.map(g=>g.season));
+      WEEK=Math.min(...up.filter(g=>g.season===SEASON).map(g=>g.week));}
+    else{SEASON=FIT.through.season;WEEK=FIT.through.week;}
+
+    stamp(d);
+    fillWeeks();renderSlate();
+    if(VIEW==='ratings')renderRatings();
+    if(VIEW==='log')renderLog();
+    if(VIEW==='bets')renderBets();
+  }catch(e){
+    const schema=/missing expected column/.test(e.message);
+    $('slate').innerHTML=`<p class="note err">${esc(e.message)}</p>`
+      +`<p class="note">${schema
+        ? 'This is a data format change upstream, not a connection problem. The '
+          +'nflverse file has been altered and the parser needs updating.'
+        : 'Check the connection and try again. If it keeps failing the source file '
+          +'may have moved.'}</p>`;
+  }
+}
+
+$('prev').onclick=()=>step(-1);
+$('next').onclick=()=>step(1);
+$('weekSel').onchange=e=>{const[s,w]=e.target.value.split('-').map(Number);
+  SEASON=s;WEEK=w;fillWeeks();renderSlate();};
+$('sortBtn').onclick=e=>{SORT=SORT==='time'?'stake':'time';
+  e.target.textContent='Sort: '+(SORT==='time'?'time':'stake');renderSlate();};
+$('refresh').onclick=async e=>{e.target.disabled=true;e.target.textContent='...';
+  await boot(true);e.target.disabled=false;e.target.textContent='Refresh';};
+$('tabSlate').onclick=()=>switchView('slate');
+$('tabRatings').onclick=()=>switchView('ratings');
+$('tabLog').onclick=()=>switchView('log');
+$('tabBets').onclick=()=>switchView('bets');
+$('ratingSort').onchange=renderRatings;
+
+function loadPrefs(){
+  try{BANK=Number(localStorage.getItem('gridiron.bank'))||1000;
+    UNIT=Number(localStorage.getItem('gridiron.unit'))||10;}catch(e){}
+  $('bank').value=BANK;$('unit').value=UNIT;
+}
+$('bank').onchange=e=>{BANK=Number(e.target.value)||0;
+  try{localStorage.setItem('gridiron.bank',BANK);}catch(x){}renderSlate();};
+$('unit').onchange=e=>{UNIT=Number(e.target.value)||1;
+  try{localStorage.setItem('gridiron.unit',UNIT);}catch(x){}renderSlate();};
+
+/* Export and import so a cleared browser is not a lost season */
+$('exportBets').onclick=()=>{
+  const blob=new Blob([JSON.stringify(BETS,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='gridiron-bets-'+new Date().toISOString().slice(0,10)+'.json';
+  a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+};
+$('importBets').onclick=()=>{
+  const inp=document.createElement('input');inp.type='file';inp.accept='application/json';
+  inp.onchange=async()=>{
+    try{
+      const txt=await inp.files[0].text();const arr=JSON.parse(txt);
+      if(!Array.isArray(arr))throw new Error('not a bet file');
+      const seen=new Set(BETS.map(betKey));
+      for(const b of arr)if(b&&b.id&&b.mkt&&!seen.has(betKey(b))){BETS.push(b);seen.add(betKey(b));}
+      await saveBets();renderBets();
+    }catch(e){alert('Could not read that file: '+e.message);}
+  };
+  inp.click();
+};
+$('clearBets').onclick=async()=>{
+  if(!confirm('Delete every logged bet? Export first if you want a copy.'))return;
+  BETS=[];await saveBets();renderBets();
+};
+
+loadPrefs();
+$('peSave').onclick=()=>{
+  PE_S.key=$('peKey').value.trim();
+  PE_S.mine=[...document.querySelectorAll('#peBooks input:checked')].map(x=>x.value);
+  if(!PE_S.mine.length) PE_S.mine=PE_DEFAULT_MINE.slice();
+  peSaveSettings(PE_NS,PE_S); renderPricePanel(); refreshPrices(true);
+};
+$('peRefresh').onclick=async e=>{ e.target.disabled=true; e.target.textContent='...';
+  await refreshPrices(true); e.target.disabled=false; e.target.textContent='Refresh prices'; };
+renderPricePanel();
+loadBets().then(()=>boot(false)).then(()=>refreshPrices(false));
+if('serviceWorker' in navigator)
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+</script>
+</body>
+</html>

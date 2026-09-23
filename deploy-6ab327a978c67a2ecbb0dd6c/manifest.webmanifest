@@ -1,0 +1,15 @@
+{
+  "name": "Gridiron Model",
+  "short_name": "Gridiron",
+  "description": "NFL moneyline, spread and total analysis with a graded bet record and closing line value.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#151A26",
+  "theme_color": "#151A26",
+  "icons": [
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" }
+  ]
+}

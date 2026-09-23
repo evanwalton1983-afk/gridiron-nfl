@@ -1,0 +1,450 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "contract": {
+      "type": "string",
+      "const": "warroom.import"
+    },
+    "contract_version": {
+      "type": "string",
+      "const": "1.0"
+    },
+    "batch": {
+      "type": "object",
+      "properties": {
+        "source_batch_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Unique id for this run in the source app."
+        },
+        "source_app": {
+          "type": "string",
+          "enum": [
+            "gridiron_nfl",
+            "gridiron_cfb",
+            "corner_ufc"
+          ]
+        },
+        "model_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model_version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The app's VERSION constant."
+        },
+        "model_config": {
+          "description": "Model parameters at run time. Stored as metadata only, never applied.",
+          "type": "object",
+          "propertyNames": {
+            "type": "string"
+          },
+          "additionalProperties": {}
+        },
+        "generated_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+          "description": "ISO 8601 timestamp in UTC, ending in Z."
+        },
+        "is_backfill": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source_batch_id",
+        "source_app",
+        "model_name",
+        "model_version",
+        "generated_at"
+      ],
+      "title": "Batch"
+    },
+    "records": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sport": {
+            "type": "string",
+            "minLength": 1
+          },
+          "league": {
+            "type": "string",
+            "minLength": 1
+          },
+          "season": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          },
+          "grouping": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "week",
+                  "card",
+                  "tournament"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "type",
+              "label"
+            ]
+          },
+          "event": {
+            "type": "object",
+            "properties": {
+              "source_event_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "start_time": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                "description": "ISO 8601 timestamp in UTC, ending in Z."
+              },
+              "start_time_precision": {
+                "default": "exact",
+                "description": "'date' when the source only knows the day. The date part of start_time (YYYY-MM-DD) is then the local event date and the time part is ignored.",
+                "type": "string",
+                "enum": [
+                  "exact",
+                  "date"
+                ]
+              },
+              "timezone": {
+                "type": "string",
+                "minLength": 1,
+                "description": "IANA time zone of the event, for example America/New_York."
+              },
+              "neutral_site": {
+                "type": "boolean"
+              },
+              "venue": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "participants": {
+                "minItems": 2,
+                "maxItems": 2,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "home",
+                        "away",
+                        "fighter_a",
+                        "fighter_b"
+                      ]
+                    },
+                    "name": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Name as shown in the source app. The War Room resolves aliases."
+                    },
+                    "source_id": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "required": [
+                    "role",
+                    "name"
+                  ]
+                }
+              },
+              "bout": {
+                "description": "UFC only.",
+                "type": "object",
+                "properties": {
+                  "weight_class": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "scheduled_rounds": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  },
+                  "card_position": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "bout_order": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "title_fight": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            },
+            "required": [
+              "start_time",
+              "timezone",
+              "participants"
+            ]
+          },
+          "market": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "minLength": 1,
+                "description": "moneyline, spread, total, or team_total."
+              },
+              "period": {
+                "description": "Defaults to full_game (team sports) or full_event (UFC).",
+                "type": "string",
+                "minLength": 1
+              },
+              "participant_scope": {
+                "description": "Team totals only: which team the total belongs to.",
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "enum": [
+                      "home",
+                      "away"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "is_alternate": {
+                "default": false,
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "selection": {
+            "type": "object",
+            "properties": {
+              "side": {
+                "type": "string",
+                "enum": [
+                  "home",
+                  "away",
+                  "over",
+                  "under",
+                  "fighter_a",
+                  "fighter_b"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "side",
+              "label"
+            ]
+          },
+          "price": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "line": {
+                    "description": "Required for markets with a line. Signed from the selection's perspective.",
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "american_odds": {
+                    "description": "Required whenever a real price is sent.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "opposite_american_odds": {
+                    "description": "Strongly recommended.",
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": -9007199254740991,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "sportsbook": {
+                    "description": "Book name as shown. A price with no book is dropped and flagged unverified_price.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "captured_at": {
+                    "description": "When the price was fetched (UTC). Required with american_odds.",
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "format": "date-time",
+                        "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                        "description": "ISO 8601 timestamp in UTC, ending in Z."
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "description": "Send the line alone (no odds) when the market has a line but no verified price. Omit the block entirely for a moneyline with no price."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "model": {
+            "type": "object",
+            "properties": {
+              "prob_win": {
+                "type": "number"
+              },
+              "prob_push": {
+                "description": "Required on whole-number spread and total lines, and on NFL moneylines (ties).",
+                "type": "number"
+              },
+              "prob_loss": {
+                "description": "Derived as 1 - prob_win - prob_push when missing.",
+                "type": "number"
+              },
+              "projection": {
+                "type": "object",
+                "propertyNames": {
+                  "type": "string"
+                },
+                "additionalProperties": {}
+              },
+              "fair_line": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "confidence": {
+                "type": [
+                  "string",
+                  "number",
+                  "null"
+                ]
+              },
+              "edge_supplied": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "ladder": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "line": {
+                      "type": "number"
+                    },
+                    "prob_win": {
+                      "type": "number"
+                    },
+                    "prob_push": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "line",
+                    "prob_win"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "prob_win"
+            ]
+          },
+          "flags": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "record_id",
+          "sport",
+          "league",
+          "season",
+          "grouping",
+          "event",
+          "market",
+          "selection",
+          "model"
+        ],
+        "title": "Record",
+        "description": "One record per selection. A spread market produces a home record and an away record."
+      }
+    }
+  },
+  "required": [
+    "contract",
+    "contract_version",
+    "batch",
+    "records"
+  ],
+  "title": "War Room import contract 1.0",
+  "$id": "https://war-room.local/contract/warroom-import-1.0.schema.json",
+  "$comment": "Generated from src/lib/contract/schema.ts by scripts/gen-json-schema.ts. Do not edit by hand."
+}
