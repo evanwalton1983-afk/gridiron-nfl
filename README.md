@@ -6,9 +6,20 @@ ratings across every completed game since 1999, and predicts the selected week.
 
 ## Deploy to Netlify
 
-Drag the `deploy` folder (and only that folder) onto the Netlify drop zone at
-https://app.netlify.com/drop. It holds just the five files the live app needs.
-Everything else in this project (tests, docs, node_modules) stays out of it.
+The live site is https://gridirionnfl.netlify.app (Netlify project
+`gridirionnfl`). To update it, open
+https://app.netlify.com/projects/gridirionnfl/deploys and drag the `deploy`
+folder onto the drag and drop box at the bottom of that page. Drag the `deploy`
+folder itself, not the `gridiron-nfl` folder around it. It holds just the five
+files the live app needs. Everything else in this project (tests, docs,
+node_modules) stays out of it.
+
+If the whole project folder goes up instead, the site root shows Netlify's
+"Page not found", the app only exists at `/deploy/index.html`, and the tests and
+docs become public. Dragging the `deploy` folder again fixes it.
+
+https://app.netlify.com/drop makes a brand new site at a new address, so it is
+only for a first deploy, never for an update.
 
 That is the entire deployment. No build step, no environment variables, no
 dependencies. `netlify.toml` sets the publish directory and keeps the service
@@ -188,3 +199,42 @@ with push included, not the push-free Model column. The nflverse closing
 numbers are sent as lines only, flagged `no_price_in_app`, because they have
 no book. For the War Room to accept the handoff, this site's domain must be
 listed in `handoff_allowed_origins` in War Room Settings.
+
+## Fair prices
+
+The Slate tab has a **Fair price** panel with two settings, saved in this
+browser.
+
+**Fair price method** sets the no vig price shown for every side. The default
+is Shin. The four methods are multiplicative (every side scaled by the same
+factor, which is how the app worked through 2.2.0), additive (the same amount
+taken off every side), power (every side raised to the power that makes them
+sum to 1) and Shin (a model of insider money, with a closed form for two
+outcomes). In a two outcome market Shin and additive give the same number to
+the last digit, so in this app they always agree. Each price on the board
+carries its method underneath.
+
+**EV gate** sets the fair price the model has to beat by 4 points before
+anything is flagged, on the slate and in the season log. The default is Worst
+case: for the side being bet, the highest fair probability any of the four
+methods gives it. The gate is the model minus that number, so the highest one
+leaves the smallest edge. On moneylines that works out to power on the
+favourite and multiplicative on the underdog. Each gap on the board names the
+method it was measured against.
+
+Walk forward on the 2010 to 2025 closing prices, 4,363 games:
+
+| gate | games flagged | record | flat return per bet |
+|---|---|---|---|
+| multiplicative (2.2.0) | 1,397 | 605-774 | +1.31% |
+| worst case (default) | 1,381 | 593-770 | +0.99% |
+| Shin or additive | 1,603 | 649-937 | -0.90% |
+| power | 1,766 | 689-1060 | -0.22% |
+| lowest of the four | 1,781 | 700-1064 | -0.02% |
+
+The first two are inside the noise of each other. The looser gates flag
+hundreds more games, almost all of them moneyline underdogs, and the extra
+bets did not pay. Lowest of the four is not offered as a setting.
+
+Closing value on the Bets tab is always graded against the multiplicative
+price, so the split into shopping and model stays exact.

@@ -13,6 +13,16 @@ export const FIX = path.join(ROOT, 'test', 'fixtures');
 export const NOW = Date.parse('2026-09-23T19:00:00Z');
 export const APP_ORIGIN = 'https://gridiron.test';
 
+// The version as the app declares it, so tests follow every bump. Throws if
+// index.html and sw.js disagree, because a missed sw.js bump strands phones
+// on the old cached shell.
+export function appVersion() {
+  const m = fs.readFileSync(path.join(APP_DIR, 'index.html'), 'utf8').match(/const MODEL_VERSION='([^']+)'/);
+  const s = fs.readFileSync(path.join(APP_DIR, 'sw.js'), 'utf8').match(/const APP_VERSION='([^']+)'/);
+  if (!m || !s || m[1] !== s[1]) throw new Error(`MODEL_VERSION ${m && m[1]} and APP_VERSION ${s && s[1]} must match`);
+  return m[1];
+}
+
 const CSV = fs.readFileSync(path.join(FIX, 'games.csv'), 'utf8');
 const oddsText = () => fs.readFileSync(path.join(FIX, 'odds-api.json'), 'utf8');
 

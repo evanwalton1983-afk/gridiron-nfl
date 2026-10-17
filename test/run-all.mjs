@@ -6,6 +6,8 @@ const steps = [
   ['compare to baseline', ['test/compare.mjs', 'test/baseline/before.json', 'test/out/after.json']],
   ['payload (jsdom)', ['test/payload.test.mjs']],
   ['handoff (Chromium)', ['test/handoff.test.mjs']],
+  ['fair price', ['test/fair.test.mjs']],
+  ['no em or en dashes', ['test/no-dashes.mjs']],
 ];
 let failed = 0;
 for (const [name, args] of steps) {

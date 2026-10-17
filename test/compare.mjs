@@ -1,6 +1,9 @@
 // Compares two snapshots. The only permitted difference is the version
-// string in the footer ("Model 2.1.0." to "Model 2.2.0."), which is required
+// string in the footer ("Model 2.3.0." to "Model 2.3.1."), which is required
 // by the version bump. Every other displayed character must match.
+// test/baseline/before.json is the 2.3.0 defaults (Shin shown, worst case
+// gate). before-2.1.0.json is the original, which fair.test.mjs still checks
+// the Multiplicative setting against number for number.
 import fs from 'node:fs';
 import path from 'node:path';
 import { ROOT } from './lib/boot.mjs';

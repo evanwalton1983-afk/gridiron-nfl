@@ -4,7 +4,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import Ajv2020 from 'ajv/dist/2020.js';
 import addFormats from 'ajv-formats';
-import { bootApp, ROOT, NOW, APP_DIR } from './lib/boot.mjs';
+import { bootApp, ROOT, NOW, APP_DIR, appVersion } from './lib/boot.mjs';
 
 const schema = JSON.parse(fs.readFileSync(path.join(ROOT, 'docs', 'warroom-import-1.0.schema.json'), 'utf8'));
 const ajv = new Ajv2020({ allErrors: true, strict: false }); addFormats(ajv);
@@ -109,7 +109,7 @@ for (const live of [false, true]) {
   console.log(`  ${checked} board rows cross-checked: exported probabilities reproduce the on-screen Model column and price`);
 
   // Batch.
-  ok(P.batch.model_version === '2.2.0' && P.batch.source_app === 'gridiron_nfl', 'batch identity');
+  ok(P.batch.model_version === appVersion() && P.batch.source_app === 'gridiron_nfl', 'batch identity ' + P.batch.model_version);
   ok(/^gridiron_nfl-2026-Week 3-\d{8}T\d{6}Z$/.test(P.batch.source_batch_id), 'batch id ' + P.batch.source_batch_id);
   ok(!B.json.includes('TESTKEY'), 'the Odds API key never appears in the payload');
   ok(P.batch.model_config.gain === 0.0624 && P.batch.model_config.NOVIG_BAR === 0.04, 'model_config carries BEST and gates');
