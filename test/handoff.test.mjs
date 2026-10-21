@@ -6,7 +6,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import { chromium } from 'playwright';
-import { APP_DIR, FIX, ROOT } from './lib/boot.mjs';
+import { APP_DIR, FIX, ROOT, appVersion } from './lib/boot.mjs';
 
 const CSV = fs.readFileSync(path.join(FIX, 'games.csv'), 'utf8');
 const APP = 'http://127.0.0.1:8801', RECV = 'http://localhost:8802', IMP = 'http://localhost:8803';
@@ -155,7 +155,7 @@ console.log('\n[5] service worker');
   const { ctx, page } = await openApp({ sw: 'allow' });
   const keys = await page.evaluate(async () => { await navigator.serviceWorker.ready; for (let i = 0; i < 40; i++) {
     const k = await caches.keys(); if (k.length) return k; await new Promise(r => setTimeout(r, 100)); } return []; });
-  ok(keys.includes('gridiron-2.2.0'), 'cache ' + keys.join(','));
+  ok(keys.includes('gridiron-' + appVersion()), 'cache ' + keys.join(','));
   await ctx.close();
 }
 

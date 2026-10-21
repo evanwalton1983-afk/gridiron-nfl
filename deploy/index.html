@@ -64,6 +64,10 @@ button.on{border-color:var(--model);color:var(--model)}
 .pe-books label{display:flex;gap:5px;align-items:center}
 .pe-books input{min-height:auto;width:auto;padding:0}
 .pe-note{color:var(--dim);font-size:11.5px;line-height:1.55;margin:8px 0 0}
+.fair-row{display:flex;gap:8px;margin-top:10px;align-items:center;flex-wrap:wrap}
+.fair-row label{flex:0 0 128px;color:var(--mute);font-size:12.5px}
+.fair-row select{flex:1;min-width:150px;min-height:38px;font-size:13.5px;padding:0 10px}
+.fm{font-size:11px;color:var(--dim);font-weight:400}
 .wr{margin:0 0 14px;border:1px solid var(--line);border-radius:var(--r);background:var(--surface);padding:10px 12px;font-size:13px}
 .wr-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .wr-row button{min-height:40px;font-size:13.5px}
@@ -204,6 +208,33 @@ h3{font-size:15px;font-weight:600;margin:22px 0 8px}
     slate (moneyline, spread, total). A free key has 500 a month. Prices refresh on their own at
     most once an hour. The key is stored in this browser only.</p>
   </details>
+  <details class="prices" id="fairPanel">
+    <summary>Fair price <span id="fairStatus"></span></summary>
+    <div class="fair-row">
+      <label for="fairDisp">Fair price method</label>
+      <select id="fairDisp">
+        <option value="shin">Shin</option>
+        <option value="power">Power</option>
+        <option value="additive">Additive</option>
+        <option value="multiplicative">Multiplicative</option>
+      </select>
+    </div>
+    <div class="fair-row">
+      <label for="fairGate">EV gate</label>
+      <select id="fairGate">
+        <option value="worst">Worst case</option>
+        <option value="shin">Shin</option>
+        <option value="power">Power</option>
+        <option value="additive">Additive</option>
+        <option value="multiplicative">Multiplicative</option>
+      </select>
+    </div>
+    <p class="pe-note">Fair price method sets the no vig price shown for every side. EV gate
+    sets the fair price the model has to beat by the gap bar before a bet is flagged, on this
+    tab and in the season log. Worst case uses, for the side being bet, whichever of the four
+    methods is hardest to beat: the highest fair probability. Multiplicative is how the app
+    worked before 2.3.0. Closing value on the Bets tab is always graded multiplicative.</p>
+  </details>
   <div class="wr" id="wrPanel">
     <div class="wr-row">
       <button id="wrSend" disabled>Send to War Room</button>
@@ -312,7 +343,7 @@ h3{font-size:15px;font-weight:600;margin:22px 0 8px}
       line existed, which is every modern game.
    ============================================================ */
 
-const MODEL_VERSION='2.2.0';
+const MODEL_VERSION='2.3.0';
 
 /* Staking. KELLY_FRAC is quarter Kelly, MAX_STAKE caps any single bet at
    2% of bankroll, EV_BAR is the minimum expected value per dollar risked,
@@ -335,6 +366,122 @@ function kellyOf(p,odds){if(odds==null)return 0;const d=amToDec(odds);if(d<=1)re
 function noVig(o1,o2){if(o1==null||o2==null)return null;
   const q1=amToProb(o1),q2=amToProb(o2),s=q1+q2;
   return s>0?[q1/s,q2/s]:null;}
+
+/* ============================================================
+   FAIR PRICE
+   Four ways to take the vig out of one book's prices for one market. Each
+   takes the implied probabilities (1 / decimal odds) of every outcome and
+   returns fair probabilities that sum to 1, or null when it has no answer.
+     multiplicative  every side scaled by the same factor. This is noVig
+                     above, kept bit for bit.
+     additive        the same amount taken off every side. Null when that
+                     pushes a long shot to zero or below.
+     power           every side raised to the power k that makes them sum
+                     to 1, with k found by safeguarded Newton.
+     shin            Shin's insider model. Closed form for two outcomes,
+                     the fixed point iteration for three or more.
+   Power and Shin put more of the vig on the long shot, which is where books
+   put it, so on a lopsided moneyline they give the favourite a higher fair
+   probability than multiplicative does.
+
+   Shin's closed form and iteration are ported from github.com/mberk/shin.
+   The additive and power methods follow the implied module of
+   github.com/martineastwood/penaltyblog. Both are MIT licensed:
+
+   Copyright (c) 2020, Maurice Berk
+   Copyright 2021 Martin Eastwood
+
+   Permission is hereby granted, free of charge, to any person obtaining a copy
+   of this software and associated documentation files (the "Software"), to deal
+   in the Software without restriction, including without limitation the rights
+   to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+   copies of the Software, and to permit persons to whom the Software is
+   furnished to do so, subject to the following conditions:
+
+   The above copyright notice and this permission notice shall be included in
+   all copies or substantial portions of the Software.
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+   AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+   LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+   OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+   THE SOFTWARE.
+   ============================================================ */
+const fairPrice=(()=>{
+  const sum=q=>{let s=0;for(const x of q)s+=x;return s;};
+  const valid=q=>Array.isArray(q)&&q.length>=2&&q.every(x=>x>0&&x<1);
+  const prob=p=>p.every(x=>x>0&&x<1)?p:null;
+  function multiplicative(q){if(!valid(q))return null;const s=sum(q);return q.map(x=>x/s);}
+  function additive(q){if(!valid(q))return null;const m=(sum(q)-1)/q.length;return prob(q.map(x=>x-m));}
+  function power(q){if(!valid(q))return null;
+    /* g(k), the sum of q^k minus 1, falls from n-1 at k=0 toward -1: one root */
+    const g=k=>{let s=0;for(const x of q)s+=Math.pow(x,k);return s-1;};
+    const dg=k=>{let s=0;for(const x of q)s+=Math.pow(x,k)*Math.log(x);return s;};
+    let lo=0,hi=1;
+    while(g(hi)>0){lo=hi;hi*=2;if(hi>1e4)return null;}
+    let k=(lo+hi)/2;
+    for(let i=0;i<100;i++){
+      const v=g(k);if(v===0)break;
+      if(v>0)lo=k;else hi=k;
+      let nk=k-v/dg(k);
+      if(!(nk>lo&&nk<hi))nk=(lo+hi)/2;
+      if(Math.abs(nk-k)<1e-15){k=nk;break;}
+      k=nk;
+    }
+    const p=q.map(x=>Math.pow(x,k)),s=sum(p);
+    return prob(p.map(x=>x/s));}
+  function shin(q){if(!valid(q))return null;
+    const n=q.length,b=sum(q);let z;
+    if(n===2){const d=q[0]-q[1];z=((b-1)*(d*d-b))/(b*(d*d-1));}
+    else{z=0;
+      for(let i=0;i<1000;i++){const z0=z;let s=0;
+        for(const x of q)s+=Math.sqrt(z*z+4*(1-z)*x*x/b);
+        z=(s-2)/(n-2);if(Math.abs(z-z0)<=1e-12)break;}
+      /* The fixed point crawls when the vig is tiny (8,931 steps at 0.12%), so
+         when it has not landed the same equation is finished by bisection. */
+      const f=z=>{let s=0;for(const x of q)s+=Math.sqrt(z*z+4*(1-z)*x*x/b);return(s-n*z)/(2*(1-z))-1;};
+      if(Math.abs(f(z))>1e-13){
+        let lo=0,hi=1;
+        if(b<1){hi=0;lo=-1;while(f(lo)<0&&lo>-1e6)lo*=2;}
+        for(let i=0;i<200&&hi-lo>1e-16;i++){const m=(lo+hi)/2;if(f(m)>0)lo=m;else hi=m;}
+        z=(lo+hi)/2;}}
+    return prob(q.map(x=>(Math.sqrt(z*z+4*(1-z)*x*x/b)-z)/(2*(1-z))));}
+  /* decimal odds in, implied probabilities out */
+  const implied=odds=>odds.map(o=>1/o);
+  return{multiplicative,additive,power,shin,implied,methods:['shin','power','additive','multiplicative']};
+})();
+
+/* Which fair price the board shows, and which one the no vig gate is measured
+   against. Worst case takes, for the side being bet, the method that leaves
+   the smallest edge. The gate is the model minus the fair probability, so
+   that is the HIGHEST fair probability of the four for that side. */
+const FAIR_METHODS=fairPrice.methods;
+const FAIR_NAME={shin:'Shin',power:'Power',additive:'Additive',multiplicative:'Multiplicative',worst:'Worst case'};
+const FAIR_SHORT={shin:'Shin',power:'Power',additive:'Add',multiplicative:'Mult'};
+const FAIRKEY='gridiron.fair';
+function fairLoad(){
+  try{const s=JSON.parse(localStorage.getItem(FAIRKEY)||'null');
+    if(s&&FAIR_METHODS.includes(s.display)&&(s.gate==='worst'||FAIR_METHODS.includes(s.gate)))
+      return{display:s.display,gate:s.gate};}catch(e){}
+  return{display:'shin',gate:'worst'};}
+let FAIR_S=fairLoad();
+/* Every method's fair pair for one two way market, from American prices. */
+function fairPair(o1,o2){if(o1==null||o2==null)return null;
+  const q=[amToProb(o1),amToProb(o2)],out={};
+  for(const m of FAIR_METHODS)out[m]=fairPrice[m](q);
+  return out;}
+/* One side of a fair pair (i is 0 or 1): the probability the board shows and
+   the one the gate uses, each with its method. Multiplicative always has an
+   answer, so it stands in when the chosen method has none. */
+function fairSide(fp,i){if(!fp||!fp.multiplicative)return null;
+  const by={};for(const m of FAIR_METHODS)if(fp[m])by[m]=fp[m][i];
+  const disp=by[FAIR_S.display]!=null?FAIR_S.display:'multiplicative';
+  let gate='multiplicative';
+  if(FAIR_S.gate==='worst'){for(const m of FAIR_METHODS)if(by[m]!=null&&by[m]>by[gate])gate=m;}
+  else if(by[FAIR_S.gate]!=null)gate=FAIR_S.gate;
+  return{by,disp,dispP:by[disp],gate,gateP:by[gate],worst:FAIR_S.gate==='worst'};}
 
 /* ============================================================
    CSV
@@ -612,9 +759,9 @@ function predictGame(F,g){
     o.push=atomAt(k,mp,0);
     const hw=tailAbove(k,mp,0), aw=1-hw-o.push;
     o.cover=hw; o.coverPush=o.push;
-    const nvS=noVig(g.home_sp_odds,g.away_sp_odds);
-    bets.push(mkBet('Spread',g.home_team+' '+fmtLine(-g.spread_line),hw,aw,g.home_sp_odds,nvS?nvS[0]:null));
-    bets.push(mkBet('Spread',g.away_team+' '+fmtLine(g.spread_line),aw,hw,g.away_sp_odds,nvS?nvS[1]:null));
+    const nvS=noVig(g.home_sp_odds,g.away_sp_odds), fS=fairPair(g.home_sp_odds,g.away_sp_odds);
+    bets.push(mkBet('Spread',g.home_team+' '+fmtLine(-g.spread_line),hw,aw,g.home_sp_odds,nvS?nvS[0]:null,fairSide(fS,0)));
+    bets.push(mkBet('Spread',g.away_team+' '+fmtLine(g.spread_line),aw,hw,g.away_sp_odds,nvS?nvS[1]:null,fairSide(fS,1)));
 
     /* Moneyline off the same curve so all three markets agree. The atom sitting
        on the grid at minus the line is not P(tie): it pools games whose lines
@@ -624,9 +771,9 @@ function predictGame(F,g){
     const z=hAbove+aAbove;
     const hWin=(z>1e-9?hAbove/z:.5)*(1-F.emp.tie), aWin=(z>1e-9?aAbove/z:.5)*(1-F.emp.tie);
     o.win=hWin/(hWin+aWin);
-    const nvM=noVig(g.home_ml,g.away_ml);
-    bets.push(mkBet('Moneyline',g.home_team,hWin,aWin,g.home_ml,nvM?nvM[0]:null));
-    bets.push(mkBet('Moneyline',g.away_team,aWin,hWin,g.away_ml,nvM?nvM[1]:null));
+    const nvM=noVig(g.home_ml,g.away_ml), fM=fairPair(g.home_ml,g.away_ml);
+    bets.push(mkBet('Moneyline',g.home_team,hWin,aWin,g.home_ml,nvM?nvM[0]:null,fairSide(fM,0)));
+    bets.push(mkBet('Moneyline',g.away_team,aWin,hWin,g.away_ml,nvM?nvM[1]:null,fairSide(fM,1)));
   } else {
     /* No line to disagree with. Centre the band on the model's own margin so
        the win probability is at least internally consistent. */
@@ -641,9 +788,9 @@ function predictGame(F,g){
     const tpush=atomAt(k,tp,0);
     const ov=tailAbove(k,tp,0), un=1-ov-tpush;
     o.over=ov; o.overPush=tpush;
-    const nvT=noVig(g.over_odds,g.under_odds);
-    bets.push(mkBet('Total','Over '+g.total_line,ov,un,g.over_odds,nvT?nvT[0]:null));
-    bets.push(mkBet('Total','Under '+g.total_line,un,ov,g.under_odds,nvT?nvT[1]:null));
+    const nvT=noVig(g.over_odds,g.under_odds), fT=fairPair(g.over_odds,g.under_odds);
+    bets.push(mkBet('Total','Over '+g.total_line,ov,un,g.over_odds,nvT?nvT[0]:null,fairSide(fT,0)));
+    bets.push(mkBet('Total','Under '+g.total_line,un,ov,g.under_odds,nvT?nvT[1]:null,fairSide(fT,1)));
   }
 
   /* Two gates. EV says the price pays more than the risk. The no vig gate says
@@ -666,12 +813,16 @@ function predictGame(F,g){
   }
   return o;}
 
-function mkBet(mkt,side,p,pOther,odds,nv){
+/* nv stays the multiplicative no vig price, which closing value is graded
+   against. mktEdge, the number the no vig gate tests, is measured against the
+   gate's fair price (see FAIR PRICE). */
+function mkBet(mkt,side,p,pOther,odds,nv,fair){
   const denom=p+pOther;
   const pNoPush=denom>1e-9?p/denom:.5;
-  return{mkt,side,p,pOther,pNoPush,odds,nv,
+  const gp=fair?fair.gateP:nv;
+  return{mkt,side,p,pOther,pNoPush,odds,nv,fair:fair||null,
     ev:evPush(p,pOther,odds),
-    mktEdge:nv==null?null:pNoPush-nv};
+    mktEdge:gp==null?null:pNoPush-gp};
 }
 function fmtLine(x){return x>0?'+'+x:''+x;}
 
@@ -733,9 +884,10 @@ async function getData(force){
 
 /* The fit is deterministic given the set of completed games, so it only has to
    run when a new result lands. Keyed on the last completed game and the model
-   version, which means bumping MODEL_VERSION always invalidates it. */
+   version, which means bumping MODEL_VERSION always invalidates it. The season
+   log's picks depend on the EV gate, so a different gate setting does too. */
 function packFit(F){
-  return{v:MODEL_VERSION,through:F.through.id,cur:F.cur,nfit:F.nfit,basisN:F.basisN,
+  return{v:MODEL_VERSION,gate:FAIR_S.gate,through:F.through.id,cur:F.cur,nfit:F.nfit,basisN:F.basisN,
     model:F.model.snapshot(),shrink:F.shrink,
     emp:{c1:F.emp.c1,c2:F.emp.c2,tie:F.emp.tie,nSpread:F.emp.nSpread,nTotal:F.emp.nTotal,
       bands:F.emp.bands.map(b=>({n:b.n,
@@ -746,7 +898,7 @@ function packFit(F){
 function stripPred(p){const{ph,pa,margin,total,win,cover,over,edge,tedge,push,pick,why,band}=p;
   return{ph,pa,margin,total,win,cover,over,edge,tedge,push,pick,why,band};}
 function unpackFit(c,byId){
-  if(!c||c.v!==MODEL_VERSION)return null;
+  if(!c||c.v!==MODEL_VERSION||c.gate!==FAIR_S.gate)return null;
   try{
     const emp={c1:c.emp.c1,c2:c.emp.c2,tie:c.emp.tie,nSpread:c.emp.nSpread,nTotal:c.emp.nTotal,
       bands:c.emp.bands.map(b=>({n:b.n,
@@ -928,6 +1080,26 @@ function peBookGame(g,bk,hn,an){
     total_line:tOk?o.point:null, over_odds:tOk?o.price:null, under_odds:tOk?u.price:null,
     home_ml:bk.h2h[hn]!=null?bk.h2h[hn]:null, away_ml:bk.h2h[an]!=null?bk.h2h[an]:null};
 }
+/* peConsensus taken once per fair price method: the median across books that
+   post both sides at the consensus line c.line. It lives here rather than in
+   the shared block so that block stays identical in all three apps. For
+   multiplicative it returns exactly peConsensus's pA. */
+function fairConsensus(books,kind,a,b,c){
+  if(!c) return null;
+  const qs=[];
+  for(const bk of books){
+    const A=bk[kind][a], B=bk[kind][b];
+    if(kind==='h2h'){ if(A!=null&&B!=null) qs.push([amToProb(A),amToProb(B)]); }
+    else if(A&&B&&A.price!=null&&B.price!=null&&A.point===c.line) qs.push([amToProb(A.price),amToProb(B.price)]);
+  }
+  if(!qs.length) return null;
+  const out={};
+  for(const m of FAIR_METHODS){
+    const ps=qs.map(q=>fairPrice[m](q)).filter(Boolean).map(p=>p[0]), pA=ps.length?peMedian(ps):null;
+    out[m]=pA==null?null:[pA,1-pA];
+  }
+  return out;
+}
 const peRole=(x,g)=>x.mkt==='Spread'?(x.side.startsWith(g.home_team+' ')?'sh':'sa')
   :x.mkt==='Moneyline'?(x.side===g.home_team?'mh':'ma'):(x.side.startsWith('Over')?'ov':'un');
 const PE_ROLES=['sh','sa','mh','ma','ov','un'];
@@ -945,19 +1117,21 @@ function predictLive(g){
     spread_line:cS?-cS.line:g.spread_line, total_line:cT?cT.line:g.total_line,
     home_sp_odds:null,away_sp_odds:null,over_odds:null,under_odds:null,home_ml:null,away_ml:null};
   const disp=predictGame(FIT,gC);
+  const fS=fairConsensus(books,'spreads',m.hn,m.an,cS), fM=fairConsensus(books,'h2h',m.hn,m.an,cM), fT=fairConsensus(books,'totals','Over','Under',cT);
   const best={};
   for(const bk of mine){
     const gb=peBookGame(g,bk,m.hn,m.an), pb=predictGame(FIT,gb);
     for(const x of pb.bets){
       if(x.odds==null) continue;
-      const role=peRole(x,g);
-      let cons=null;
-      if((role==='sh'||role==='sa')&&cS&&-gb.spread_line===cS.line) cons=role==='sh'?cS.pA:1-cS.pA;
-      else if((role==='mh'||role==='ma')&&cM) cons=role==='mh'?cM.pA:1-cM.pA;
-      else if((role==='ov'||role==='un')&&cT&&gb.total_line===cT.line) cons=role==='ov'?cT.pA:1-cT.pA;
+      const role=peRole(x,g), i=(role==='sh'||role==='mh'||role==='ov')?0:1;
+      let cons=null, fc=null;
+      if((role==='sh'||role==='sa')&&cS&&-gb.spread_line===cS.line){ cons=role==='sh'?cS.pA:1-cS.pA; fc=fS; }
+      else if((role==='mh'||role==='ma')&&cM){ cons=role==='mh'?cM.pA:1-cM.pA; fc=fM; }
+      else if((role==='ov'||role==='un')&&cT&&gb.total_line===cT.line){ cons=role==='ov'?cT.pA:1-cT.pA; fc=fT; }
       const other=role==='sh'?gb.away_sp_odds:role==='sa'?gb.home_sp_odds:role==='mh'?gb.away_ml:role==='ma'?gb.home_ml:role==='ov'?gb.under_odds:gb.over_odds;
       const nvRef=cons!=null?cons:x.nv;
-      const cand={...x, nv:nvRef, mktEdge:nvRef==null?null:x.pNoPush-nvRef, consNv:cons,
+      const fair=cons!=null?fairSide(fc,i):x.fair, gp=fair?fair.gateP:nvRef;
+      const cand={...x, nv:nvRef, fair, mktEdge:gp==null?null:x.pNoPush-gp, consNv:cons,
         book:bk.key, bookTitle:bk.title, role, oddsOther:other,
         lineVal:(role==='sh'||role==='sa')?gb.spread_line:(role==='ov'||role==='un')?gb.total_line:null};
       if(!best[role]||cand.ev>best[role].ev) best[role]=cand;
@@ -968,7 +1142,8 @@ function predictLive(g){
     .map(x=>({...x,stake:Math.min(kellyOf(x.p,x.odds)*KELLY_FRAC,MAX_STAKE)}))
     .sort((a,b)=>b.stake-a.stake);
   const o={...disp,bets,pick:live[0]||null,live:{at:PE_DATA.at,books:books.length,mine:mine.length,stale:!!PE_DATA.stale},
-    mktLine:{spread:gC.spread_line,total:gC.total_line}};
+    mktLine:{spread:gC.spread_line,total:gC.total_line},
+    keyAnchor:(()=>{const f=fS&&(fS[FAIR_S.display]||fS.multiplicative);return f?f[0]:null;})()};
   if(!o.pick){
     if(!bets.length) o.why=mine.length?'not priced':'not at your books';
     else{ o.why='under the bar'; o.best=bets.slice().sort((a,b)=>b.ev-a.ev)[0]; }
@@ -1038,6 +1213,9 @@ const fmt=n=>(n>0?'+':'')+n.toFixed(1);
 const pct=n=>(100*n).toFixed(0)+'%';
 const pct1=n=>(100*n).toFixed(1)+'%';
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const fairTag=m=>`<div class="fm">${FAIR_SHORT[m]}</div>`;
+const gateText=()=>FAIR_S.gate==='worst'?'worst case of four fair price methods':FAIR_NAME[FAIR_S.gate]+' fair price';
+const gateOf=b=>b&&b.fair?` (${FAIR_SHORT[b.fair.gate]})`:'';
 const money=f=>'$'+(BANK*f).toFixed(0);
 const units=f=>(BANK*f/UNIT).toFixed(1)+'u';
 
@@ -1083,7 +1261,7 @@ function renderSlate(){
   const flagged=rows.filter(r=>r.p.pick).length;
   const head=`<div class="callout"><b>${flagged} of ${rows.length}</b> games clear both gates
     (${pct1(EV_BAR)} expected value and ${(100*NOVIG_BAR).toFixed(0)} points over the vig free
-    price). Most weeks should be mostly empty. Stakes are quarter Kelly capped at
+    price, gated on the ${gateText()}). Most weeks should be mostly empty. Stakes are quarter Kelly capped at
     ${(100*MAX_STAKE).toFixed(0)}% of bankroll, and a spread and a moneyline on the same
     team are the same opinion, so do not stack them.</div>`;
 
@@ -1097,7 +1275,7 @@ function renderSlate(){
       call=`<div class="edge">
         <span class="edgeN bet">${esc(b.side)}</span>
         <span class="edgeL">${b.mkt} ${b.odds>0?'+':''}${b.odds}${b.book?' at '+peShort(b.book):''}</span>
-        <span class="edgeL">${pct1(b.ev)} EV &middot; ${(100*b.mktEdge).toFixed(1)} pts over no vig</span>
+        <span class="edgeL">${pct1(b.ev)} EV &middot; ${(100*b.mktEdge).toFixed(1)} pts over no vig${gateOf(b)}</span>
         <span class="edgeL">${(100*b.stake).toFixed(2)}% &middot; ${money(b.stake)} &middot; ${units(b.stake)}</span>
       </div>`;
     } else if(p.why==='no line'){
@@ -1113,7 +1291,7 @@ function renderSlate(){
       const b=p.best;
       call=`<div class="edge"><span class="edgeN none">no bet</span>
         <span class="edgeL">best is ${b?esc(b.side)+' at '+pct1(b.ev)+' EV':'nothing'}</span>
-        <span class="edgeL">${b&&b.mktEdge!=null?(100*b.mktEdge).toFixed(1)+' pts over no vig, under the gate':'under the gate'}</span></div>`;
+        <span class="edgeL">${b&&b.mktEdge!=null?(100*b.mktEdge).toFixed(1)+' pts over no vig'+gateOf(b)+', under the gate':'under the gate'}</span></div>`;
     }
     return `
 <article class="game">
@@ -1195,14 +1373,17 @@ function boardTable(p){
       <td>${b.odds==null?'n/a':(b.odds>0?'+':'')+b.odds}</td>
       ${live?`<td>${esc(peShort(b.book))}</td>`:''}
       <td class="mv">${pct1(b.pNoPush)}</td>
-      <td class="kv">${b.nv==null?'n/a':pct1(b.nv)}</td>
-      <td class="${b.mktEdge!=null&&b.mktEdge>=NOVIG_BAR?'win':''}">${b.mktEdge==null?'n/a':(100*b.mktEdge).toFixed(1)}</td>
+      <td class="kv">${b.fair?pct1(b.fair.dispP)+fairTag(b.fair.disp):b.nv==null?'n/a':pct1(b.nv)+fairTag('multiplicative')}</td>
+      <td class="${b.mktEdge!=null&&b.mktEdge>=NOVIG_BAR?'win':''}">${b.mktEdge==null?'n/a':(100*b.mktEdge).toFixed(1)+(b.fair?`<div class="fm">vs ${FAIR_SHORT[b.fair.gate]}</div>`:'')}</td>
       <td class="${b.ev!=null&&b.ev>=EV_BAR?'win':''}">${b.ev==null?'n/a':pct1(b.ev)}</td>
     </tr>`).join('')}</tbody></table>
     <p style="color:var(--dim);font-size:11.5px;margin:6px 0 0">${live
       ? `Best price at your books, from ${p.live.books} books pulled ${Math.max(0,Math.round((Date.now()-p.live.at)/60000))} min ago${p.live.stale?' (last good pull)':''}. No vig is the median across every book at the most common line.`
       : `Prices are the schedule file's closing numbers, which you cannot bet. Add an Odds API key under Live prices to price this at your books.`}
-    Gap is the model minus the vig free price, in points of probability. It has to reach ${(100*NOVIG_BAR).toFixed(0)} before EV counts.</p></div>`;
+    No vig is shown by the ${FAIR_NAME[FAIR_S.display]} method.
+    Gap is the model minus the vig free price, in points of probability, measured against the ${FAIR_S.gate==='worst'
+      ?'highest fair price of the four methods for that side (worst case), named under each gap'
+      :FAIR_NAME[FAIR_S.gate]+' fair price'}. It has to reach ${(100*NOVIG_BAR).toFixed(0)} before EV counts.</p></div>`;
 }
 
 function logForm(g,p,i){
@@ -1358,7 +1539,8 @@ function renderLog(){
   el.innerHTML=`
   <p class="note" style="padding:4px 2px 14px">Every ${FIT.cur} game scored against
   what the model said <b>before</b> it was played, using empirics built only from
-  seasons before this one. These numbers are the model's live record, not a backtest.</p>
+  seasons before this one. These numbers are the model's live record, not a backtest.
+  Bets are flagged with the ${gateText()} as the no vig gate.</p>
   ${graded}
   <h3>How close were the numbers</h3>
   <div class="grid" style="grid-template-columns:repeat(3,1fr)">
@@ -1949,6 +2131,27 @@ $('peSave').onclick=()=>{
 $('peRefresh').onclick=async e=>{ e.target.disabled=true; e.target.textContent='...';
   await refreshPrices(true); e.target.disabled=false; e.target.textContent='Refresh prices'; };
 renderPricePanel();
+
+function renderFairPanel(){
+  $('fairDisp').value=FAIR_S.display; $('fairGate').value=FAIR_S.gate;
+  $('fairStatus').textContent=FAIR_NAME[FAIR_S.display]+' shown, '
+    +(FAIR_S.gate==='worst'?'worst case':FAIR_NAME[FAIR_S.gate])+' gate';
+}
+/* The display method only changes what is drawn. The gate changes which bets
+   are flagged, including the season log's, so the log is refit (about 130 ms). */
+function setFair(k,v){
+  if(FAIR_S[k]===v) return;
+  FAIR_S={...FAIR_S,[k]:v};
+  try{ localStorage.setItem(FAIRKEY,JSON.stringify(FAIR_S)); }catch(e){}
+  renderFairPanel();
+  if(!FIT) return;
+  if(k==='gate'){ FIT=fitAll(GAMES); cacheSet(FITKEY,packFit(FIT)); }
+  renderSlate();
+  if(VIEW==='log') renderLog();
+}
+$('fairDisp').onchange=e=>setFair('display',e.target.value);
+$('fairGate').onchange=e=>setFair('gate',e.target.value);
+renderFairPanel();
 loadBets().then(()=>boot(false)).then(()=>refreshPrices(false));
 if('serviceWorker' in navigator)
   navigator.serviceWorker.register('sw.js').catch(()=>{});
