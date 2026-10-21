@@ -3,7 +3,7 @@
 // file mode (no Odds API key) and live mode (frozen Odds API response).
 import fs from 'node:fs';
 import path from 'node:path';
-import { bootApp, snapshot, ROOT } from './lib/boot.mjs';
+import { bootApp, snapshot, textOf, ROOT } from './lib/boot.mjs';
 
 const label = process.argv[2] || 'snap';
 const htmlFile = process.argv[3] ? path.resolve(process.argv[3]) : undefined;
@@ -15,7 +15,7 @@ for (const live of [false, true]) {
   w.document.getElementById('next').click();
   await new Promise(r => setTimeout(r, 20));
   out[mode + ':next'] = { slateCallouts: [...w.document.querySelectorAll('#slate > .callout')].map(e => e.textContent.replace(/\s+/g, ' ').trim()),
-    slate: [...w.document.querySelectorAll('#slate article.game')].map(a => a.textContent.replace(/\s+/g, ' ').trim()) };
+    slate: [...w.document.querySelectorAll('#slate article.game')].map(textOf) };
   out[mode + ':errors'] = errors;
   w.close();
 }
