@@ -10,13 +10,19 @@ The live site is https://gridirionnfl.netlify.app (Netlify project
 `gridirionnfl`). To update it, open
 https://app.netlify.com/projects/gridirionnfl/deploys and drag the `deploy`
 folder onto the drag and drop box at the bottom of that page. Drag the `deploy`
-folder itself, not the `gridiron-nfl` folder around it. It holds just the five
+folder itself, not the `gridiron-nfl` folder around it. It holds just the six
 files the live app needs. Everything else in this project (tests, docs,
 node_modules) stays out of it.
 
 If the whole project folder goes up instead, the site root shows Netlify's
 "Page not found", the app only exists at `/deploy/index.html`, and the tests and
 docs become public. Dragging the `deploy` folder again fixes it.
+
+The site was first deployed from the project folder, so some phones installed the app
+from `/deploy/`. `_redirects` answers anything under `/deploy/` with the same file from
+the root (a 200 rewrite, so the address and the installed icon stay as they were). Those
+phones keep working and pick up updates, and new installs should use the root address.
+Once nobody opens the app from `/deploy/` any more, the file can be deleted.
 
 https://app.netlify.com/drop makes a brand new site at a new address, so it is
 only for a first deploy, never for an update.
@@ -34,6 +40,7 @@ worker uncached so updates take effect.
 | `manifest.webmanifest` | installable app metadata |
 | `icon.png` | app icon |
 | `netlify.toml` | publish config and cache headers |
+| `_redirects` | keeps the old `/deploy/` address working (see Deploy to Netlify) |
 
 ## How it works
 
