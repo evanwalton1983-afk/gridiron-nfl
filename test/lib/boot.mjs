@@ -83,13 +83,17 @@ export async function waitFor(fn, ms = 10000, why = () => '') {
 
 const norm = s => s.replace(/\s+/g, ' ').trim();
 
+// Text of an element with the key number blocks (data-kn, added in 2.4.0)
+// left out, so the guard keeps comparing every number that existed before them.
+export const textOf = el => { const c = el.cloneNode(true); c.querySelectorAll('[data-kn]').forEach(n => n.remove()); return norm(c.textContent); };
+
 // Everything the app displays, as text. Numbers are what matter; text is
 // kept whole so any change at all shows up.
 export function snapshot(w) {
   const d = w.document, $ = id => d.getElementById(id);
   const out = { sub: norm($('sub').textContent), foot2: norm($('foot2').textContent), foot3: norm($('foot3').textContent) };
   out.slateCallouts = [...d.querySelectorAll('#slate > .callout')].map(e => norm(e.textContent));
-  out.slate = [...d.querySelectorAll('#slate article.game')].map(a => norm(a.textContent));
+  out.slate = [...d.querySelectorAll('#slate article.game')].map(textOf);
   $('tabRatings').click();
   out.ratings = [...d.querySelectorAll('#ratings tr')].map(r => norm(r.textContent));
   $('tabLog').click();
