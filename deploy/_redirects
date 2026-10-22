@@ -1,0 +1,6 @@
+# The app first went live under /deploy/ (the whole project folder was dropped by mistake).
+# Phones that installed it from there keep working and keep updating: anything under
+# /deploy/ is answered with the same file from the root. A 200 rewrite keeps the address,
+# so the service worker scope and the home screen icon stay where they were installed.
+/deploy/*  /:splat  200
+/deploy    /        200

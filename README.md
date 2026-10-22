@@ -10,13 +10,19 @@ The live site is https://gridirionnfl.netlify.app (Netlify project
 `gridirionnfl`). To update it, open
 https://app.netlify.com/projects/gridirionnfl/deploys and drag the `deploy`
 folder onto the drag and drop box at the bottom of that page. Drag the `deploy`
-folder itself, not the `gridiron-nfl` folder around it. It holds just the five
+folder itself, not the `gridiron-nfl` folder around it. It holds just the six
 files the live app needs. Everything else in this project (tests, docs,
 node_modules) stays out of it.
 
 If the whole project folder goes up instead, the site root shows Netlify's
 "Page not found", the app only exists at `/deploy/index.html`, and the tests and
 docs become public. Dragging the `deploy` folder again fixes it.
+
+The site was first deployed from the project folder, so some phones installed the app
+from `/deploy/`. `_redirects` answers anything under `/deploy/` with the same file from
+the root (a 200 rewrite, so the address and the installed icon stay as they were). Those
+phones keep working and pick up updates, and new installs should use the root address.
+Once nobody opens the app from `/deploy/` any more, the file can be deleted.
 
 https://app.netlify.com/drop makes a brand new site at a new address, so it is
 only for a first deploy, never for an update.
@@ -34,6 +40,7 @@ worker uncached so updates take effect.
 | `manifest.webmanifest` | installable app metadata |
 | `icon.png` | app icon |
 | `netlify.toml` | publish config and cache headers |
+| `_redirects` | keeps the old `/deploy/` address working (see Deploy to Netlify) |
 
 ## How it works
 
@@ -238,3 +245,53 @@ bets did not pay. Lowest of the four is not offered as a setting.
 
 Closing value on the Bets tab is always graded against the multiplicative
 price, so the split into shopping and model stays exact.
+
+## Key numbers and teasers
+
+Open any game on the Slate tab and the **Key numbers** block sits under the
+price board. It never touches the pick model: nothing in it feeds a flag, a
+stake or a gate.
+
+**The table.** `scripts/build_key_numbers.py` is a one time script, run by hand,
+not part of the app. It reads the last 20 seasons of nflverse schedules with
+[nflreadpy](https://github.com/nflverse/nflreadpy) (MIT), and for every closing
+spread from pick'em to 14.5 in half points it records the chance of each final
+margin from the favorite's side. A row only holds 50 to 350 games, so thin rows
+borrow from their neighbors, with the weight falling off over line distance, and
+are then tilted back to the average margin for that spread so the borrowing
+cannot shift a key number. The result is `scripts/key_numbers.json`, embedded in
+`index.html` as `KEYNUM` (about 12 KB). The app downloads nothing for it. To
+refresh it each offseason, once the new season's games are in nflverse, from the
+project root:
+
+```
+pip install nflreadpy
+python scripts/build_key_numbers.py --embed
+```
+
+It needs Python 3 and internet access for that run only (nflreadpy brings in
+polars; nothing else). `--embed` rewrites the `KEYNUM` block between its markers in
+`deploy/index.html` and saves `scripts/key_numbers.json`; `--seasons N` changes the
+window (default 20, minimum 15). Then run `npm test`, bump `MODEL_VERSION` and
+`APP_VERSION`, add a CHANGELOG line, and redeploy.
+
+**Per game.** Push chance at the current spread. The fair price of every alt
+spread from -14.5 to +14.5, in the favorite's frame, with the main line matched to
+its vig free price (the row is smoothly reweighted until the cover price at the
+main line equals the market's, so the spikes at 3 and 7 keep their place). The
+value of buying or selling a half point, in cents of price. On a whole number
+line the fair price is quoted on wins against losses with the push returned.
+
+**Teasers.** The **Teasers** panel holds your 2 team and 3 team 6 point prices
+(type them like -120 and +160; saved in this browser). A leg is flagged when its
+6 points take in both 3 and 7: favorites from -7 to -8.5 and underdogs from +1.5
+to +3. Each game shows both legs with their chance to win from the table, and
+the break-even for your prices, per teaser and per leg. The week summary lists
+the flagged legs best first, marking classic half point lines (-7.5, -8.5, +1.5, +2.5) apart from whole number lines and the best 2 and 3 together. Legs are treated as
+independent, and a push does not count as a win, which is cautious.
+
+**Tests.** `test/keynumbers.test.mjs` checks the embedded table against the JSON,
+the engine (anchoring, ladder, half points, teaser flags, break-even) and the
+app. `test/keynumbers.browser.mjs` is the 390 wide Chromium check. The
+before and after compare ignores the new blocks (marked `data-kn`) so every older
+number is still held to the 2.3.0 baseline.

@@ -3,7 +3,7 @@
 // checks the settings, the gate and the labels in file and live mode.
 import fs from 'node:fs';
 import path from 'node:path';
-import { bootApp, APP_DIR, FIX, ROOT } from './lib/boot.mjs';
+import { bootApp, textOf, APP_DIR, FIX, ROOT } from './lib/boot.mjs';
 
 let pass = 0, fail = 0;
 const ok = (c, m) => { if (c) pass++; else { fail++; console.log('  FAIL', m); } };
@@ -133,7 +133,7 @@ for (const live of [false, true]) {
     w.document.getElementById('next').click();
     await new Promise(r => setTimeout(r, 20));
     const next = { slateCallouts: [...w.document.querySelectorAll('#slate > .callout')].map(e => e.textContent.replace(/\s+/g, ' ').trim()),
-      slate: [...w.document.querySelectorAll('#slate article.game')].map(a => a.textContent.replace(/\s+/g, ' ').trim()) };
+      slate: [...w.document.querySelectorAll('#slate article.game')].map(textOf) };
     let sections = 0, differ = [], count = 0;
     for (const [key, got] of [[mode + ':current', s], [mode + ':next', next]]) {
       const want = baseline[key];

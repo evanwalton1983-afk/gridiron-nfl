@@ -7,6 +7,9 @@ const steps = [
   ['payload (jsdom)', ['test/payload.test.mjs']],
   ['handoff (Chromium)', ['test/handoff.test.mjs']],
   ['fair price', ['test/fair.test.mjs']],
+  ['key numbers', ['test/keynumbers.test.mjs']],
+  ['key numbers (phone width)', ['test/keynumbers.browser.mjs']],
+  ['/deploy/ redirect, service worker and manifest', ['test/redirects.test.mjs']],
   ['no em or en dashes', ['test/no-dashes.mjs']],
 ];
 let failed = 0;
